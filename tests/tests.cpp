@@ -91,8 +91,10 @@ void cause_sigsegv() {
     *p = 42;
 }
 
+int zero = 0;
+
 void cause_sigfpe() {
-    printf("%d\n", 1 / 0);
+    printf("%d\n", 1 / zero);
 }
 
 void cause_sigill() {
