@@ -4,6 +4,8 @@
 #include <limits>
 
 #if 1
+#include <errno.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/socket.h>
