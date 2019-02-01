@@ -573,10 +573,12 @@ TEST_CASE( "reraise sigio" ) {
             perror("setown");
             goto bad;
         }
+#ifdef F_SETSIG
         if (fcntl(sv[0], F_SETSIG, SIGIO)) {
             perror("setsig");
             goto bad;
         }
+#endif
         flags = fcntl(0, F_GETFL);
         if (fcntl(sv[0], F_SETFL, flags | O_ASYNC) == -1) {
             perror("setfl async");
