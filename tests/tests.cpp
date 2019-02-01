@@ -244,7 +244,7 @@ TEST_CASE( "reraise 'raised' sigsegv" ) {
         CHECK(shared->info.si_code == SI_TKILL);
 #else
         INFO("si_code: " << shared->info.si_code);
-        CHECK("Expected si_code for this system unknown" == 0);
+        CHECK("Expected si_code for this system unknown" == nullptr);
 #endif
     } else {
         PosixSignalManager::create();
