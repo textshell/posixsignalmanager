@@ -428,7 +428,7 @@ TEST_CASE( "reraise 'mq' sigsegv" ) {
         const char *name = "/PosixSignalManager-test";
         mq_unlink(name);
         mqd_t mqdes = mq_open(name, O_RDWR | O_CREAT, 0600, nullptr);
-        if (mqdes == -1) {
+        if (mqdes == (mqd_t)-1) {
             perror("mq_open");
             _exit(98);
         }
