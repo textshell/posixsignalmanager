@@ -240,8 +240,10 @@ TEST_CASE( "reraise 'raised' sigsegv" ) {
         WAS_SIGNALED_WITH(SIGSEGV);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
-#ifdef SI_TKILL
+#if !defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_TKILL);
+#elif defined(__FreeBSD__)
+        CHECK(shared->info.si_code == SI_LWP);
 #else
         INFO("si_code: " << shared->info.si_code);
         CHECK("Expected si_code for this system unknown" == nullptr);
@@ -765,7 +767,11 @@ TEST_CASE( "term handler (sighup)" ) {
         WAS_SIGNALED_WITH(SIGHUP);
         CHECK(shared->caught_signal.load() == SIGHUP);
         CHECK(shared->type == shared_page::termination);
+#if !defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_TKILL);
+#else
+        CHECK(shared->info.si_code == SI_LWP);
+#endif
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler);
@@ -884,7 +890,11 @@ TEST_CASE( "notify (sighup)" ) {
         HAS_EXITED_WITH(42);
         CHECK(shared->caught_signal.load() == SIGHUP);
         CHECK(shared->type == shared_page::notify);
+#if !defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_TKILL);
+#else
+        CHECK(shared->info.si_code == SI_LWP);
+#endif
     } else {
         int argc = 1;
         char *argv[] = { "test-inner", nullptr };

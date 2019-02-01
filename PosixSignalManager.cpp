@@ -90,8 +90,11 @@ namespace {
         int savedErrno = errno;
 
         bool isUser = info->si_code == SI_USER || info->si_code == SI_QUEUE
-#ifdef    SI_TKILL
+#ifdef SI_TKILL
                 || info->si_code == SI_TKILL
+#endif
+#ifdef SI_LWP
+                || info->si_code == SI_LWP
 #endif
                 ;
         bool isDynamic = (info->si_code < 0 && !isUser) || info->si_code == SI_TIMER || info->si_code == SI_MESGQ
