@@ -112,9 +112,13 @@ namespace {
             case SIGIO:
             case SIGPIPE:
             case SIGPROF:
+#ifdef SIGPWR
             case SIGPWR:
+#endif
             case SIGQUIT:
+#ifdef SIGSTKFLT
             case SIGSTKFLT:
+#endif
             case SIGSYS:
             case SIGTERM:
             case SIGTRAP:
@@ -404,9 +408,13 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
     installIfDefault(SIGIO);
     installIfDefault(SIGPIPE);
     installIfDefault(SIGPROF);
+#ifdef SIGPWR
     installIfDefault(SIGPWR);
+#endif
     installIfDefault(SIGQUIT);
+#ifdef SIGSTKFLT
     installIfDefault(SIGSTKFLT);
+#endif
     installIfDefault(SIGSYS);
     installIfDefault(SIGTERM);
     installIfDefault(SIGTRAP);
