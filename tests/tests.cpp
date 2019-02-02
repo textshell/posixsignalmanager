@@ -945,7 +945,8 @@ TEST_CASE( "notify (sighup)" ) {
 #endif
     } else {
         int argc = 1;
-        char *argv[] = { "test-inner", nullptr };
+        char fake_name[] = "test-inner";
+        char *argv[] = { fake_name, nullptr };
         QCoreApplication app(argc, argv);
 
         PosixSignalManager::create();
