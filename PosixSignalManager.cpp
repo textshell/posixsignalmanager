@@ -17,10 +17,18 @@
 #include <QMutexLocker>
 #include <QSocketNotifier>
 
-#ifdef _NSIG
-    #define NUM_SIGNALS _NSIG
+#ifdef NSIG
+#if defined(__linux__) || !defined(SIGRTMAX)
+    #define NUM_SIGNALS NSIG
 #else
-    #define NUM_SIGNALS 65
+    #if SIGRTMAX > _NSIG
+    #define NUM_SIGNALS (SIGRTMAX + 1)
+    #else
+    #define NUM_SIGNALS NSIG
+    #endif
+#endif
+#else
+#error missing signal number macro
 #endif
 
 namespace {
