@@ -98,7 +98,11 @@ namespace {
 #endif
                 ;
         bool isDynamic = (info->si_code < 0 && !isUser) || info->si_code == SI_TIMER || info->si_code == SI_MESGQ
-                || info->si_code == SI_ASYNCIO || info->si_code == SI_SIGIO;
+                || info->si_code == SI_ASYNCIO
+#ifdef SI_SIGIO
+                || info->si_code == SI_SIGIO
+#endif
+                ;
 
         bool isTermination = false;
         bool isCrash = false;
