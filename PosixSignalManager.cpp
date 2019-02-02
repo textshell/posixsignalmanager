@@ -148,6 +148,10 @@ namespace {
                 break;
         }
 
+        if (signo >= SIGRTMIN && signo <= SIGRTMAX) {
+            isTermination = true;
+        }
+
         asyncSignalHandlerRunning.fetch_add(1, std::memory_order_seq_cst);
 
         SignalState* signalState = &signalStates[signo];
@@ -433,6 +437,12 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
     installIfDefault(SIGVTALRM);
     installIfDefault(SIGXCPU);
     installIfDefault(SIGXFSZ);
+
+#ifdef SIGRTMAX
+    for (int i = SIGRTMIN; i < SIGRTMAX; i++) {
+        installIfDefault(i);
+    }
+#endif
 
     return newNode->id;
 }

@@ -829,6 +829,34 @@ TEST_CASE( "term handler (sighup)" ) {
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
+TEST_CASE( "term handler (sigrt)" ) {
+    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+    REQUIRE(shared != MAP_FAILED);
+    shared->caught_signal.store(0);
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        siginfo_t info;
+        errno = 0;
+        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
+        REQUIRE(r == 0);
+        WAS_SIGNALED_WITH(SIGRTMIN+1);
+        CHECK(shared->caught_signal.load() == SIGRTMIN+1);
+        CHECK(shared->type == shared_page::termination);
+#if !defined(__FreeBSD__)
+        CHECK(shared->info.si_code == SI_TKILL);
+#else
+        CHECK(shared->info.si_code == SI_LWP);
+#endif
+    } else {
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler);
+        raise(SIGRTMIN+1);
+        _exit(99);
+    }
+    REQUIRE(!munmap(shared, sizeof(shared_page)));
+}
+
 TEST_CASE( "ignored term handler (sighup)" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
