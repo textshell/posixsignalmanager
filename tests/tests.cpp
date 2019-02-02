@@ -544,7 +544,9 @@ TEST_CASE( "reraise sigbus" ) {
 }
 #endif
 
-#ifdef SIGIO
+#if defined(SIGIO)
+#if !defined(__FreeBSD__)
+// ^^^ on freebsd sigio is ignored by default, so reraise will not kill the child
 TEST_CASE( "reraise sigio" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
@@ -592,6 +594,49 @@ bad:
     }
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
+#else
+TEST_CASE( "check sigio" ) {
+    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+    REQUIRE(shared != MAP_FAILED);
+    shared->caught_signal.store(0);
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        siginfo_t info;
+        errno = 0;
+        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
+        REQUIRE(r == 0);
+        HAS_EXITED_WITH(42);
+        CHECK(shared->caught_signal.load() == SIGIO);
+        CHECK(shared->type == shared_page::sync);
+        // SIGIO is siginfo less in freebsd
+        CHECK(shared->info.si_code == SI_KERNEL);
+    } else {
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGIO, &reraise_handler);
+        int sv[2];
+        int flags;
+        if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
+            perror("socketpair");
+            goto bad;
+        }
+        if (fcntl(sv[0], F_SETOWN, getpid()) == -1) {
+            perror("setown");
+            goto bad;
+        }
+        flags = fcntl(0, F_GETFL);
+        if (fcntl(sv[0], F_SETFL, flags | O_ASYNC) == -1) {
+            perror("setfl async");
+            goto bad;
+        }
+        write(sv[1], "b", 1);
+        _exit(42);
+bad:
+        _exit(98);
+    }
+    REQUIRE(!munmap(shared, sizeof(shared_page)));
+}
+#endif
 #endif
 
 #ifndef NO_SIGILL

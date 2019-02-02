@@ -113,7 +113,10 @@ namespace {
             case SIGFPE:
             case SIGHUP:
             case SIGINT:
+#if !defined(__FreeBSD__)
+            // ^^^ freebsd ignores sigio by default
             case SIGIO:
+#endif
             case SIGPIPE:
             case SIGPROF:
 #ifdef SIGPWR
@@ -409,7 +412,10 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
     installIfDefault(SIGFPE);
     installIfDefault(SIGHUP);
     installIfDefault(SIGINT);
+#if !defined(__FreeBSD__)
+    // ^^^ freebsd ignores sigio by default
     installIfDefault(SIGIO);
+#endif
     installIfDefault(SIGPIPE);
     installIfDefault(SIGPROF);
 #ifdef SIGPWR
