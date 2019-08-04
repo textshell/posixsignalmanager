@@ -557,6 +557,12 @@ void PosixSignalManager::removeHandler(int id) {
     }
 }
 
+void PosixSignalManager::barrier() {
+    while (asyncSignalHandlerRunning.load(std::memory_order_seq_cst) != 0) {
+        // spin wait until no signal handler is running
+    }
+}
+
 int PosixSignalManager::addSignalNotifier(int signo, PosixSignalNotifier *notifier) {
     PosixSignalManagerPrivate *const d = impl.data();
     QMutexLocker locker(&d->mutex);

@@ -61,6 +61,8 @@ public:
     int allocateSignal();
     bool deallocateSignal(int signo);
 
+    void barrier();
+
 public: // internal interface
     int addSignalNotifier(int signo, PosixSignalNotifier* notifier);
 
