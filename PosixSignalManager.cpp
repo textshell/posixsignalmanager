@@ -156,9 +156,11 @@ namespace {
                 break;
         }
 
+#ifdef SIGRTMIN
         if (signo >= SIGRTMIN && signo <= SIGRTMAX) {
             isTermination = true;
         }
+#endif
 
         asyncSignalHandlerRunning.fetch_add(1, std::memory_order_seq_cst);
 
