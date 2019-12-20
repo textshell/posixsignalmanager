@@ -105,8 +105,13 @@ namespace {
                 || info->si_code == SI_LWP
 #endif
                 ;
-        bool isDynamic = (info->si_code < 0 && !isUser) || info->si_code == SI_TIMER || info->si_code == SI_MESGQ
+        bool isDynamic = (info->si_code < 0 && !isUser) || info->si_code == SI_TIMER
+#ifdef SI_MESGQ
+                || info->si_code == SI_MESGQ
+#endif
+#ifdef SI_ASYNCIO
                 || info->si_code == SI_ASYNCIO
+#endif
 #ifdef SI_SIGIO
                 || info->si_code == SI_SIGIO
 #endif
