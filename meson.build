@@ -21,13 +21,26 @@ endif
 qt5 = import('qt5')
 qt5_dep = dependency('qt5', modules: 'Core')
 
-posixsignalmanager_lib = static_library('posixsignalmangager', 'PosixSignalManager.cpp',
+posixsignalmanager_lib = both_libraries('posixsignalmangager', 'PosixSignalManager.cpp',
                                         qt5.preprocess(moc_headers: 'PosixSignalManager.h'),
-                                        dependencies : qt5_dep, cpp_args: macros)
+                                        dependencies : [qt5_dep, librt], cpp_args: macros,
+                                        install: true)
 
 posixsignalmanager_dep = declare_dependency(link_with: posixsignalmanager_lib,
                                             include_directories: include_directories('.'),
                                             dependencies: [qt5_dep, librt])
+
+install_headers('PosixSignalManager.h')
+
+import('pkgconfig').generate(
+  posixsignalmanager_lib,
+  version: '0.0',
+  description: 'management of posix signals for environments using the qt event loop',
+  filebase: 'PosixSignalManager',
+  name: 'PosixSignalManager',
+  subdirs: ['.']
+)
+
 if not meson.is_subproject()
   testlib = static_library('testlib', 'tests/catch_main.cpp')
   test('tests', executable('tests', 'tests/tests.cpp', link_with: [testlib],
