@@ -1,4 +1,6 @@
-﻿#include <aio.h>
+#if __has_include(<aio.h>)
+#include <aio.h>
+#endif
 #include <fcntl.h>
 #include <mqueue.h>
 #include <unistd.h>
@@ -472,6 +474,7 @@ TEST_CASE( "reraise 'mq' sigsegv" ) {
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
+#if __has_include(<aio.h>)
 TEST_CASE( "reraise 'aio' sigsegv" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
@@ -519,6 +522,7 @@ TEST_CASE( "reraise 'aio' sigsegv" ) {
     }
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
+#endif
 
 #ifndef NO_SIGBUS
 TEST_CASE( "baseline sigbus" ) {
