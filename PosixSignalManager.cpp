@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <limits.h>
 #endif
 
 #include <QDebug>
@@ -30,6 +31,10 @@
 #else
 #error missing signal number macro
 #endif
+
+// POSIX requires write(2) on a O_NONBLOCK pipe to be atomic with payloads smaller than PIPE_BUF, which we depend
+// on for siginfo_t.
+static_assert (sizeof(siginfo_t) < PIPE_BUF, "siginfo_t is bigger than limit for atomic pipe writes");
 
 namespace {
     PosixSignalManager *instance = nullptr;
@@ -191,6 +196,9 @@ namespace {
 
         if (!cb.isStopChainSet()) {
             while (notifyFd) {
+                // We depend on this write to be atomic. Posix requires writes smaller than PIPE_BUF to be
+                // atomic and the size requirement is checked above in a static_assert.
+                // If the pipe is full the signal is silently dropped.
                 write(notifyFd->write_fd, info, sizeof(*info));
                 notifyFd = notifyFd->next.load(std::memory_order_seq_cst);
             }
