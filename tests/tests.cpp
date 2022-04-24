@@ -2,7 +2,9 @@
 #include <aio.h>
 #endif
 #include <fcntl.h>
+#if __has_include(<mqueue.h>)
 #include <mqueue.h>
+#endif
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -422,6 +424,7 @@ TEST_CASE( "reraise 'timer' sigsegv" ) {
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
+#if __has_include(<mqueue.h>)
 TEST_CASE( "reraise 'mq' sigsegv" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
@@ -473,6 +476,7 @@ TEST_CASE( "reraise 'mq' sigsegv" ) {
     }
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
+#endif
 
 #if __has_include(<aio.h>)
 TEST_CASE( "reraise 'aio' sigsegv" ) {
