@@ -425,6 +425,23 @@ TEST_CASE( "reraise 'timer' sigsegv" ) {
 }
 
 #if __has_include(<mqueue.h>)
+#if defined(__FreeBSD__)
+// FreeBSD doesn't implement mq_open (it only returns ENOSYS)
+TEST_CASE( "mqueue not implemented" ) {
+    const char *name = "/PosixSignalManager-test";
+    mq_unlink(name);
+    errno = 0;
+    mqd_t mqdes = mq_open(name, O_RDWR | O_CREAT, 0600, nullptr);
+    auto saved_errno = errno;
+    REQUIRE(mqdes == (mqd_t)-1);
+    REQUIRE(saved_errno == ENOSYS);
+}
+#else
+#define HAVE_MQ 1
+#endif
+#endif
+
+#if HAVE_MQ
 TEST_CASE( "reraise 'mq' sigsegv" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
