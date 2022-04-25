@@ -670,7 +670,7 @@ TEST_CASE( "reraise sigill" ) {
         WAS_SIGNALED_WITH(SIGILL);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGBUS, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGILL, &reraise_handler);
         cause_sigill();
         _exit(99);
     }
