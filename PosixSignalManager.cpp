@@ -131,7 +131,7 @@ namespace {
             case SIGFPE:
             case SIGHUP:
             case SIGINT:
-#if !defined(__FreeBSD__) && !defined(__OpenBSD__)
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__)
             // ^^^ various bsds ignore sigio by default
             case SIGIO:
 #endif
@@ -224,8 +224,9 @@ namespace {
 
             if ((signo == SIGSEGV || signo == SIGBUS || signo == SIGILL || signo == SIGFPE)
                     && !isUser && !isDynamic
-#if defined(__OpenBSD__)
-// It seems that OpenBSD does not reliably set si_code when using raise(2)
+#if defined(__OpenBSD__) || defined(__APPLE__)
+// It seems that OpenBSD does not reliably set si_code when using raise(2).
+// Same for MacOS.
                     && false
 #endif
                     ) {
@@ -445,7 +446,7 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
     installIfDefault(SIGFPE);
     installIfDefault(SIGHUP);
     installIfDefault(SIGINT);
-#if !defined(__FreeBSD__) && !defined(__OpenBSD__)
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__)
     // ^^^ various bsds ignore sigio by default
     installIfDefault(SIGIO);
 #endif

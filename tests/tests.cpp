@@ -147,6 +147,10 @@ void cause_sigbus() {
     int fd = open("signalmanager_test_tmpfile", O_CREAT, 0700);
     char *ptr = (char*)mmap(nullptr, 4096, PROT_WRITE | PROT_READ, 0, fd, 0);
     *ptr = 5;
+#elif defined(__APPLE__)
+    int fd = open("signalmanager_test_tmpfile", O_CREAT, 0700);
+    char *ptr = (char*)mmap(nullptr, 4096, PROT_WRITE, MAP_PRIVATE, fd, 0);
+    *ptr = 5;
 #else
     /* Enable Alignment Checking */
 #if defined(__GNUC__)
@@ -194,7 +198,7 @@ void termination_handler(const siginfo_t *info, void *context) {
     shared->caught_signal.store(info->si_signo);
 }
 
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(__APPLE__)
 
 #define WAIT_CHILD                         \
     int info;                              \
@@ -279,7 +283,7 @@ TEST_CASE( "reraise 'raised' sigsegv" ) {
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(__APPLE__)
 #elif !defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_TKILL);
 #elif defined(__FreeBSD__)
@@ -309,7 +313,10 @@ TEST_CASE( "reraise 'killed' sigsegv" ) {
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
+#if defined(__APPLE__)
+#else
         CHECK(shared->info.si_code == SI_USER);
+#endif
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
@@ -526,7 +533,10 @@ TEST_CASE( "reraise 'aio' sigsegv" ) {
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
+#if defined(__APPLE__)
+#else
         CHECK(shared->info.si_code == SI_ASYNCIO);
+#endif
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
@@ -595,8 +605,8 @@ TEST_CASE( "reraise sigbus" ) {
 #endif
 
 #if defined(SIGIO)
-#if !defined(__FreeBSD__) && !defined(__OpenBSD__)
-// ^^^ on {freebsd,openbsd} sigio is ignored by default, so reraise will not kill the child
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__)
+// ^^^ on {freebsd,openbsd,apple} sigio is ignored by default, so reraise will not kill the child
 TEST_CASE( "reraise sigio" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
@@ -660,6 +670,8 @@ TEST_CASE( "check sigio" ) {
         CHECK(shared->info.si_code == SI_KERNEL);
 #elif defined(__OpenBSD__)
         CHECK(shared->info.si_code == SI_USER);
+#elif defined(__APPLE__)
+        CHECK(shared->info.si_code == 0);
 #else
         CHECK(shared->info.si_code == POLL_IN);
 #endif
@@ -794,7 +806,7 @@ TEST_CASE( "reraise sigtrap" ) {
 }
 #endif
 
-#if defined(SIGIO) && !defined(__FreeBSD__) && !defined(__OpenBSD__)
+#if defined(SIGIO) && defined(SIGRTMIN) && !defined(__FreeBSD__) && !defined(__OpenBSD__)
 // ^^^ various bsds do not have a way to change the signal for O_ASYNC
 TEST_CASE( "reraise 'io' sigrt" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
@@ -853,7 +865,7 @@ TEST_CASE( "term handler (sighup)" ) {
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGHUP);
         CHECK(shared->type == shared_page::termination);
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(__APPLE__)
 #elif !defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_TKILL);
 #else
@@ -881,7 +893,7 @@ TEST_CASE( "term handler (sigrt)" ) {
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGRTMIN+1);
         CHECK(shared->type == shared_page::termination);
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(__APPLE__)
 #elif !defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_TKILL);
 #else
@@ -996,7 +1008,7 @@ TEST_CASE( "notify (sighup)" ) {
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGHUP);
         CHECK(shared->type == shared_page::notify);
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(__APPLE__)
 #elif !defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_TKILL);
 #else
