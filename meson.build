@@ -42,7 +42,13 @@ import('pkgconfig').generate(
 )
 
 if not meson.is_subproject()
-  testlib = static_library('testlib', 'tests/catch_main.cpp')
+
+  catch2_dep = dependency('catch2', required : get_option('system-catch2'))
+  if not catch2_dep.found()
+    catch2_dep = declare_dependency(compile_args: ['-DBUNDLED_CATCH2'])
+  endif
+
+  testlib = static_library('testlib', 'tests/catch_main.cpp', dependencies: [catch2_dep])
   test('tests', executable('tests', 'tests/tests.cpp', link_with: [testlib],
-       dependencies: [posixsignalmanager_dep, qt5_dep, librt]))
+       dependencies: [posixsignalmanager_dep, qt5_dep, librt, catch2_dep]))
 endif

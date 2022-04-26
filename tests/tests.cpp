@@ -11,7 +11,11 @@
 
 #define CATCH_CONFIG_EXTERNAL_INTERFACES
 #define CATCH_CONFIG_NO_POSIX_SIGNALS
+#ifndef BUNDLED_CATCH2
+#include "catch2/catch.hpp"
+#else
 #include "catch.hpp"
+#endif
 
 #include <QVector>
 #include <QCoreApplication>
