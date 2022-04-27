@@ -131,13 +131,13 @@ namespace {
             case SIGFPE:
             case SIGHUP:
             case SIGINT:
-#if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__)
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__) && !defined(__NetBSD__)
             // ^^^ various bsds ignore sigio by default
             case SIGIO:
 #endif
             case SIGPIPE:
             case SIGPROF:
-#ifdef SIGPWR
+#if defined(SIGPWR) && !defined(__NetBSD__)
             case SIGPWR:
 #endif
             case SIGQUIT:
@@ -446,13 +446,13 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
     installIfDefault(SIGFPE);
     installIfDefault(SIGHUP);
     installIfDefault(SIGINT);
-#if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__)
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__) && !defined(__NetBSD__)
     // ^^^ various bsds ignore sigio by default
     installIfDefault(SIGIO);
 #endif
     installIfDefault(SIGPIPE);
     installIfDefault(SIGPROF);
-#ifdef SIGPWR
+#if defined(SIGPWR) && !defined(__NetBSD__)
     installIfDefault(SIGPWR);
 #endif
     installIfDefault(SIGQUIT);
