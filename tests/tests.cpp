@@ -103,7 +103,7 @@ void cause_sigsegv() {
 int zero = 0;
 
 void cause_sigfpe() {
-    printf("%d\n", 1 / zero);
+    printf("%d\n", 3 / zero);
 }
 
 void cause_sigill() {
