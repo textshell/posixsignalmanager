@@ -188,6 +188,12 @@ void termination_handler(const siginfo_t *info, void *context) {
     shared->caught_signal.store(info->si_signo);
 }
 
+#define WAIT_CHILD                                                      \
+    siginfo_t info;                                                     \
+    errno = 0;                                                          \
+    int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);   \
+    REQUIRE(r == 0)
+
 #define WAS_SIGNALED_WITH(signo)        \
     CHECK(info.si_pid == pid);          \
     CHECK(info.si_code == CLD_KILLED);  \
@@ -202,10 +208,7 @@ TEST_CASE( "baseline sigsegv" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGSEGV);
     } else {
         cause_sigsegv();
@@ -220,10 +223,7 @@ TEST_CASE( "reraise sigsegv" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGSEGV);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
@@ -245,10 +245,7 @@ TEST_CASE( "reraise 'raised' sigsegv" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGSEGV);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
@@ -277,10 +274,7 @@ TEST_CASE( "reraise 'killed' sigsegv" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGSEGV);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
@@ -302,10 +296,7 @@ TEST_CASE( "reraise 'queued' sigsegv" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGSEGV);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
@@ -336,10 +327,7 @@ TEST_CASE( "reraise 'io' sigsegv" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGSEGV);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
@@ -388,10 +376,7 @@ TEST_CASE( "reraise 'timer' sigsegv" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGSEGV);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
@@ -449,10 +434,7 @@ TEST_CASE( "reraise 'mq' sigsegv" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGSEGV);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
@@ -503,10 +485,7 @@ TEST_CASE( "reraise 'aio' sigsegv" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGSEGV);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
@@ -550,10 +529,7 @@ TEST_CASE( "baseline sigbus" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGBUS);
     } else {
         cause_sigbus();
@@ -569,10 +545,7 @@ TEST_CASE( "reraise sigbus" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGBUS);
         CHECK(shared->sig_count == 1);
     } else {
@@ -595,10 +568,7 @@ TEST_CASE( "reraise sigio" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGIO);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGIO);
@@ -644,10 +614,7 @@ TEST_CASE( "check sigio" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         HAS_EXITED_WITH(42);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGIO);
@@ -692,10 +659,7 @@ TEST_CASE( "baseline sigill" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGILL);
     } else {
         cause_sigill();
@@ -711,10 +675,7 @@ TEST_CASE( "reraise sigill" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGILL);
         CHECK(shared->sig_count == 1);
     } else {
@@ -731,10 +692,7 @@ TEST_CASE( "baseline sigfpe" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGFPE);
     } else {
         cause_sigfpe();
@@ -748,10 +706,7 @@ TEST_CASE( "reraise sigfpe" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGFPE);
         CHECK(shared->sig_count == 1);
     } else {
@@ -768,10 +723,7 @@ TEST_CASE( "baseline sigtrap" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGTRAP);
     } else {
         cause_sigtrap();
@@ -787,10 +739,7 @@ TEST_CASE( "reraise sigtrap" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGTRAP);
         CHECK(shared->sig_count == 1);
     } else {
@@ -812,10 +761,7 @@ TEST_CASE( "reraise 'io' sigrt" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGRTMIN);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGRTMIN);
@@ -860,10 +806,7 @@ TEST_CASE( "term handler (sighup)" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGHUP);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGHUP);
@@ -889,10 +832,7 @@ TEST_CASE( "term handler (sigrt)" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGRTMIN+1);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGRTMIN+1);
@@ -918,10 +858,7 @@ TEST_CASE( "ignored term handler (sighup)" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         HAS_EXITED_WITH(99);
         CHECK(shared->sig_count == 0);
         CHECK(shared->caught_signal.load() == 0);
@@ -942,10 +879,7 @@ TEST_CASE( "removed term handler (sighup)" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         HAS_EXITED_WITH(99);
         CHECK(shared->sig_count == 0);
         CHECK(shared->caught_signal.load() == 0);
@@ -967,10 +901,7 @@ TEST_CASE( "crash handler (sigsegv)" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGSEGV);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
@@ -992,10 +923,7 @@ TEST_CASE( "removed crash handler (sigsegv)" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGSEGV);
         CHECK(shared->sig_count == 0);
         CHECK(shared->caught_signal.load() == 0);
@@ -1017,10 +945,7 @@ TEST_CASE( "notify (sighup)" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
-        siginfo_t info;
-        errno = 0;
-        int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
-        REQUIRE(r == 0);
+        WAIT_CHILD;
         HAS_EXITED_WITH(42);
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGHUP);
