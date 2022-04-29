@@ -131,8 +131,8 @@ namespace {
             case SIGFPE:
             case SIGHUP:
             case SIGINT:
-#if !defined(__FreeBSD__)
-            // ^^^ freebsd ignores sigio by default
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__)
+            // ^^^ various bsds ignore sigio by default
             case SIGIO:
 #endif
             case SIGPIPE:
@@ -223,7 +223,12 @@ namespace {
             sigset_t unblock, prevBlocked;
 
             if ((signo == SIGSEGV || signo == SIGBUS || signo == SIGILL || signo == SIGFPE)
-                    && !isUser && !isDynamic) {
+                    && !isUser && !isDynamic
+#if defined(__OpenBSD__)
+// It seems that OpenBSD does not reliably set si_code when using raise(2)
+                    && false
+#endif
+                    ) {
                 // Fatal, best reraise option is just return from handler with default signal disposition
                 // NOTE this will not work on linux < 4.14 if the signal is not a real SIGSEGV, but an io event
                 //      masquerading as SIGSEGV etc. Just don't do that.
@@ -440,8 +445,8 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
     installIfDefault(SIGFPE);
     installIfDefault(SIGHUP);
     installIfDefault(SIGINT);
-#if !defined(__FreeBSD__)
-    // ^^^ freebsd ignores sigio by default
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__)
+    // ^^^ various bsds ignore sigio by default
     installIfDefault(SIGIO);
 #endif
     installIfDefault(SIGPIPE);

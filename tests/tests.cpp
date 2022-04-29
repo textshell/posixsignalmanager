@@ -143,6 +143,11 @@ void cause_sigtrap() {
 }
 
 void cause_sigbus() {
+#if defined(__OpenBSD__)
+    int fd = open("signalmanager_test_tmpfile", O_CREAT, 0700);
+    char *ptr = (char*)mmap(nullptr, 4096, PROT_WRITE | PROT_READ, 0, fd, 0);
+    *ptr = 5;
+#else
     /* Enable Alignment Checking */
 #if defined(__GNUC__)
 #if defined(__i386__)
@@ -171,6 +176,7 @@ void cause_sigbus() {
     /* Dereference it as an int pointer, causing an unaligned access */
 
     *iptr = 42;
+#endif
 }
 
 void reraise_handler(PosixSignalFlags &flags, const siginfo_t *info, void *context) {
@@ -188,6 +194,27 @@ void termination_handler(const siginfo_t *info, void *context) {
     shared->caught_signal.store(info->si_signo);
 }
 
+#if defined(__OpenBSD__)
+
+#define WAIT_CHILD                         \
+    int info;                              \
+    errno = 0;                             \
+    int r = waitpid(WAIT_ANY, &info, 0);   \
+    INFO("info=" << std::hex << info);     \
+    REQUIRE(r != -1)
+
+#define WAS_SIGNALED_WITH(signo)        \
+    CHECK(r == pid);                    \
+    CHECK(WIFSIGNALED(info));           \
+    CHECK(WTERMSIG(info) == signo)
+
+#define HAS_EXITED_WITH(retno)          \
+    CHECK(r == pid);                    \
+    CHECK(WIFEXITED(info));             \
+    CHECK(WEXITSTATUS(info) == retno)
+
+#else
+
 #define WAIT_CHILD                                                      \
     siginfo_t info;                                                     \
     errno = 0;                                                          \
@@ -203,6 +230,8 @@ void termination_handler(const siginfo_t *info, void *context) {
     CHECK(info.si_pid == pid);          \
     CHECK(info.si_code == CLD_EXITED);  \
     CHECK(info.si_status == retno)
+
+#endif
 
 TEST_CASE( "baseline sigsegv" ) {
     pid_t pid = fork();
@@ -250,7 +279,8 @@ TEST_CASE( "reraise 'raised' sigsegv" ) {
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
-#if !defined(__FreeBSD__)
+#if defined(__OpenBSD__)
+#elif !defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_TKILL);
 #elif defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_LWP);
@@ -289,6 +319,8 @@ TEST_CASE( "reraise 'killed' sigsegv" ) {
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
+#if defined(SIGRTMIN)
+// ^^^ sigqueue depends on realtime signals
 TEST_CASE( "reraise 'queued' sigsegv" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
@@ -312,6 +344,7 @@ TEST_CASE( "reraise 'queued' sigsegv" ) {
     }
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
+#endif
 
 #ifdef __linux__
 TEST_CASE( "reraise 'io' sigsegv" ) {
@@ -369,6 +402,8 @@ bad:
 }
 #endif
 
+#if defined(SIGRTMIN)
+// ^^^ timer_create depends on realtime signals
 TEST_CASE( "reraise 'timer' sigsegv" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
@@ -408,6 +443,7 @@ TEST_CASE( "reraise 'timer' sigsegv" ) {
     }
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
+#endif
 
 #if __has_include(<mqueue.h>)
 #if defined(__FreeBSD__)
@@ -559,8 +595,8 @@ TEST_CASE( "reraise sigbus" ) {
 #endif
 
 #if defined(SIGIO)
-#if !defined(__FreeBSD__)
-// ^^^ on freebsd sigio is ignored by default, so reraise will not kill the child
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__)
+// ^^^ on {freebsd,openbsd} sigio is ignored by default, so reraise will not kill the child
 TEST_CASE( "reraise sigio" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
@@ -619,8 +655,14 @@ TEST_CASE( "check sigio" ) {
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGIO);
         CHECK(shared->type == shared_page::sync);
+#if defined(__FreeBSD__)
         // SIGIO is siginfo less in freebsd
         CHECK(shared->info.si_code == SI_KERNEL);
+#elif defined(__OpenBSD__)
+        CHECK(shared->info.si_code == SI_USER);
+#else
+        CHECK(shared->info.si_code == POLL_IN);
+#endif
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGIO, &reraise_handler);
@@ -752,8 +794,8 @@ TEST_CASE( "reraise sigtrap" ) {
 }
 #endif
 
-#if defined(SIGIO) && !defined(__FreeBSD__)
-// ^^^ FreeBSD does not have a way to change the signal for O_ASYNC
+#if defined(SIGIO) && !defined(__FreeBSD__) && !defined(__OpenBSD__)
+// ^^^ various bsds do not have a way to change the signal for O_ASYNC
 TEST_CASE( "reraise 'io' sigrt" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
@@ -811,7 +853,8 @@ TEST_CASE( "term handler (sighup)" ) {
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGHUP);
         CHECK(shared->type == shared_page::termination);
-#if !defined(__FreeBSD__)
+#if defined(__OpenBSD__)
+#elif !defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_TKILL);
 #else
         CHECK(shared->info.si_code == SI_LWP);
@@ -825,6 +868,7 @@ TEST_CASE( "term handler (sighup)" ) {
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
+#if defined(SIGRTMIN)
 TEST_CASE( "term handler (sigrt)" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
@@ -837,7 +881,8 @@ TEST_CASE( "term handler (sigrt)" ) {
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGRTMIN+1);
         CHECK(shared->type == shared_page::termination);
-#if !defined(__FreeBSD__)
+#if defined(__OpenBSD__)
+#elif !defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_TKILL);
 #else
         CHECK(shared->info.si_code == SI_LWP);
@@ -850,6 +895,7 @@ TEST_CASE( "term handler (sigrt)" ) {
     }
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
+#endif
 
 TEST_CASE( "ignored term handler (sighup)" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
@@ -950,7 +996,8 @@ TEST_CASE( "notify (sighup)" ) {
         CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGHUP);
         CHECK(shared->type == shared_page::notify);
-#if !defined(__FreeBSD__)
+#if defined(__OpenBSD__)
+#elif !defined(__FreeBSD__)
         CHECK(shared->info.si_code == SI_TKILL);
 #else
         CHECK(shared->info.si_code == SI_LWP);
