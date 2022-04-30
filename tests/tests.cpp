@@ -80,6 +80,7 @@ QVector<int> utsRelease() {
 struct shared_page {
     std::atomic<int> caught_signal;
     enum { notcalled, termination, sync, notify } type = notcalled;
+    std::atomic<int> sig_count{0};
     siginfo_t info;
 };
 
@@ -165,6 +166,7 @@ void cause_sigbus() {
 }
 
 void reraise_handler(PosixSignalFlags &flags, const siginfo_t *info, void *context) {
+    ++shared->sig_count;
     shared->type = shared_page::sync;
     memcpy(&shared->info, info, sizeof(*info));
     shared->caught_signal.store(info->si_signo);
@@ -172,6 +174,7 @@ void reraise_handler(PosixSignalFlags &flags, const siginfo_t *info, void *conte
 }
 
 void termination_handler(const siginfo_t *info, void *context) {
+    ++shared->sig_count;
     shared->type = shared_page::termination;
     memcpy(&shared->info, info, sizeof(*info));
     shared->caught_signal.store(info->si_signo);
@@ -214,6 +217,7 @@ TEST_CASE( "reraise sigsegv" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGSEGV);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
         CHECK(shared->info.si_code == SEGV_MAPERR);
@@ -238,6 +242,7 @@ TEST_CASE( "reraise 'raised' sigsegv" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGSEGV);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
 #if !defined(__FreeBSD__)
@@ -269,6 +274,7 @@ TEST_CASE( "reraise 'killed' sigsegv" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGSEGV);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
         CHECK(shared->info.si_code == SI_USER);
@@ -293,6 +299,7 @@ TEST_CASE( "reraise 'queued' sigsegv" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGSEGV);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
         CHECK(shared->info.si_code == SI_QUEUE);
@@ -326,6 +333,7 @@ TEST_CASE( "reraise 'io' sigsegv" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGSEGV);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
         if (!linux_pre_4_14) {
@@ -377,6 +385,7 @@ TEST_CASE( "reraise 'timer' sigsegv" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGSEGV);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
         CHECK(shared->info.si_code == SI_TIMER);
@@ -419,6 +428,7 @@ TEST_CASE( "reraise 'mq' sigsegv" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGSEGV);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
         CHECK(shared->info.si_code == SI_MESGQ);
@@ -470,6 +480,7 @@ TEST_CASE( "reraise 'aio' sigsegv" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGSEGV);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
         CHECK(shared->info.si_code == SI_ASYNCIO);
@@ -534,6 +545,7 @@ TEST_CASE( "reraise sigbus" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGBUS);
+        CHECK(shared->sig_count == 1);
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGBUS, &reraise_handler);
@@ -559,6 +571,7 @@ TEST_CASE( "reraise sigio" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGIO);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGIO);
         CHECK(shared->type == shared_page::sync);
         CHECK(shared->info.si_code == POLL_IN);
@@ -607,6 +620,7 @@ TEST_CASE( "check sigio" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         HAS_EXITED_WITH(42);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGIO);
         CHECK(shared->type == shared_page::sync);
         // SIGIO is siginfo less in freebsd
@@ -668,6 +682,7 @@ TEST_CASE( "reraise sigill" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGILL);
+        CHECK(shared->sig_count == 1);
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGILL, &reraise_handler);
@@ -704,6 +719,7 @@ TEST_CASE( "reraise sigfpe" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGFPE);
+        CHECK(shared->sig_count == 1);
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGFPE, &reraise_handler);
@@ -742,6 +758,7 @@ TEST_CASE( "reraise sigtrap" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGTRAP);
+        CHECK(shared->sig_count == 1);
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGTRAP, &reraise_handler);
@@ -766,6 +783,7 @@ TEST_CASE( "reraise 'io' sigrt" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGRTMIN);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGRTMIN);
         CHECK(shared->type == shared_page::sync);
         CHECK(shared->info.si_code == POLL_IN);
@@ -813,6 +831,7 @@ TEST_CASE( "term handler (sighup)" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGHUP);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGHUP);
         CHECK(shared->type == shared_page::termination);
 #if !defined(__FreeBSD__)
@@ -841,6 +860,7 @@ TEST_CASE( "term handler (sigrt)" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGRTMIN+1);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGRTMIN+1);
         CHECK(shared->type == shared_page::termination);
 #if !defined(__FreeBSD__)
@@ -869,6 +889,7 @@ TEST_CASE( "ignored term handler (sighup)" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         HAS_EXITED_WITH(99);
+        CHECK(shared->sig_count == 0);
         CHECK(shared->caught_signal.load() == 0);
     } else {
         signal(SIGHUP, SIG_IGN);
@@ -892,6 +913,7 @@ TEST_CASE( "removed term handler (sighup)" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         HAS_EXITED_WITH(99);
+        CHECK(shared->sig_count == 0);
         CHECK(shared->caught_signal.load() == 0);
     } else {
         signal(SIGHUP, SIG_IGN);
@@ -916,6 +938,7 @@ TEST_CASE( "crash handler (sigsegv)" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGSEGV);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::termination);
         CHECK(shared->info.si_code == SEGV_MAPERR);
@@ -940,6 +963,7 @@ TEST_CASE( "removed crash handler (sigsegv)" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         WAS_SIGNALED_WITH(SIGSEGV);
+        CHECK(shared->sig_count == 0);
         CHECK(shared->caught_signal.load() == 0);
     } else {
         signal(SIGHUP, SIG_IGN);
@@ -964,6 +988,7 @@ TEST_CASE( "notify (sighup)" ) {
         int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);
         REQUIRE(r == 0);
         HAS_EXITED_WITH(42);
+        CHECK(shared->sig_count == 1);
         CHECK(shared->caught_signal.load() == SIGHUP);
         CHECK(shared->type == shared_page::notify);
 #if !defined(__FreeBSD__)
@@ -980,6 +1005,7 @@ TEST_CASE( "notify (sighup)" ) {
         PosixSignalManager::create();
         PosixSignalNotifier n(SIGHUP);
         QObject::connect(&n, &PosixSignalNotifier::activated, [&] (int signo, QSharedPointer<const siginfo_t> info) {
+            ++shared->sig_count;
             shared->type = shared_page::notify;
             memcpy(&shared->info, info.data(), sizeof(*info.data()));
             shared->caught_signal.store(info->si_signo);
