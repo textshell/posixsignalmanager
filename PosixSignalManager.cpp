@@ -36,6 +36,8 @@
 // on for siginfo_t.
 static_assert (sizeof(siginfo_t) < PIPE_BUF, "siginfo_t is bigger than limit for atomic pipe writes");
 
+#define LIBNAME "PosixSignalManager: "
+
 namespace {
     PosixSignalManager *instance = nullptr;
 
@@ -92,6 +94,34 @@ namespace {
             signalStates[i].handlerInstalled = false;
         }
         syncTerminationHandlers.store(nullptr, std::memory_order_seq_cst);
+    }
+
+    void PosixSignalManager_sigdie(const char *msg, int code) {
+        write(2, msg, strlen(msg));
+        if (code) {
+            // open coded int to ascii code, because async signal safety requirements.
+            unsigned int tmp;
+            if (code < 0) {
+                write(2, "-", 1);
+                tmp = -(unsigned int)code;
+            } else {
+                tmp = (unsigned int)code;
+            }
+            int digitValue = 1;
+            while (tmp / digitValue >= 10) {
+                digitValue *= 10;
+            }
+            do {
+                char ch = '0' + (tmp / digitValue);
+                write(2, &ch, 1);
+                tmp /= 10;
+                digitValue /= 10;
+            } while (digitValue > 0);
+
+        }
+        write(2, "\r\n", 2);
+        signal(SIGABRT, SIG_DFL);
+        abort();
     }
 
     void PosixSignalManager_handler(int signo, siginfo_t *info, void *context) {
@@ -200,6 +230,7 @@ namespace {
                 // atomic and the size requirement is checked above in a static_assert.
                 // If the pipe is full the signal is silently dropped.
                 write(notifyFd->write_fd, info, sizeof(*info));
+                // error of write explicitly not handled.
                 notifyFd = notifyFd->next.load(std::memory_order_seq_cst);
             }
         }
@@ -235,8 +266,12 @@ namespace {
                 //      masquerading as SIGSEGV etc. Just don't do that.
                 newAction.sa_handler = SIG_DFL;
                 newAction.sa_flags = 0;
-                sigemptyset(&newAction.sa_mask);
-                sigaction(signo, &newAction, &prevAction); //TODO error handling
+                if (sigemptyset(&newAction.sa_mask) != 0) {
+                    PosixSignalManager_sigdie(LIBNAME "Error in signal handler. Can not create empty signal set in crash reraise: ", errno);
+                }
+                if (sigaction(signo, &newAction, &prevAction) != 0) {
+                    PosixSignalManager_sigdie(LIBNAME "Error in signal handler. Can not reset handler to default in crash reraise: ", errno);
+                }
 
 #ifdef __linux__
                 if (1) {
@@ -263,18 +298,32 @@ namespace {
                 // trigger default signal handling.
                 newAction.sa_handler = SIG_DFL;
                 newAction.sa_flags = 0;
-                sigaction(signo, &newAction, &prevAction); //TODO error handling
-                raise(signo);
+                if (sigaction(signo, &newAction, &prevAction) != 0) {
+                    PosixSignalManager_sigdie(LIBNAME "Error in signal handler. Can not reset handler to default in reraise: ", errno);
+                }
+                if (raise(signo) != 0) {
+                    PosixSignalManager_sigdie(LIBNAME "Error in signal handler. Can not raise signal in reraise: ", errno);
+                }
 
-                sigemptyset(&unblock);
-                sigaddset(&unblock, signo);
-                sigprocmask(SIG_UNBLOCK, &unblock, &prevBlocked); // TODO error handling
+                if (sigemptyset(&unblock) != 0) {
+                    PosixSignalManager_sigdie(LIBNAME "Error in signal handler. Can not create empty signal set in reraise: ", errno);
+                }
+                if (sigaddset(&unblock, signo) != 0) {
+                    PosixSignalManager_sigdie(LIBNAME "Error in signal handler. Can not add signal to signal set in reraise: ", errno);
+                }
+                if (sigprocmask(SIG_UNBLOCK, &unblock, &prevBlocked) != 0) {
+                    PosixSignalManager_sigdie(LIBNAME "Error in signal handler. Can not unblock signal in reraise: ", errno);
+                }
                 // signal triggers here after unblock
 
                 // For signals like SIGTSTP this code is reachable
 
-                sigprocmask(SIG_SETMASK, &prevBlocked, nullptr); // TODO error handling
-                sigaction(signo, &prevAction, nullptr); // TODO error handling
+                if (sigprocmask(SIG_SETMASK, &prevBlocked, nullptr) != 0) {
+                    PosixSignalManager_sigdie(LIBNAME "Error in signal handler. Can not restore signal mask in reraise: ", errno);
+                }
+                if (sigaction(signo, &prevAction, nullptr) != 0) {
+                    PosixSignalManager_sigdie(LIBNAME "Error in signal handler. Can not restore handler in reraise: ", errno);
+                }
             }
         }
 
