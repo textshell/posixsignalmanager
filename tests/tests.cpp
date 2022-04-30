@@ -643,7 +643,12 @@ TEST_CASE( "check sigio" ) {
             perror("setfl async");
             goto bad;
         }
+        sigset_t newmask, oldmask;
+        sigemptyset(&newmask);
+        sigaddset(&newmask, SIGIO);
+        sigprocmask(SIG_BLOCK, &newmask, &oldmask);
         write(sv[1], "b", 1);
+        sigsuspend(&oldmask);
         _exit(42);
 bad:
         _exit(98);
