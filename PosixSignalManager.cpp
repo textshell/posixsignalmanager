@@ -256,6 +256,7 @@ namespace {
             } else {
                 // trigger default signal handling.
                 newAction.sa_handler = SIG_DFL;
+                newAction.sa_flags = 0;
                 sigaction(signo, &newAction, &prevAction); //TODO error handling
                 raise(signo);
 
