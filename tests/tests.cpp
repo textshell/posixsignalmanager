@@ -143,44 +143,10 @@ void cause_sigtrap() {
 }
 
 void cause_sigbus() {
-#if defined(__OpenBSD__)
-    int fd = open("signalmanager_test_tmpfile", O_CREAT, 0700);
-    char *ptr = (char*)mmap(nullptr, 4096, PROT_WRITE | PROT_READ, 0, fd, 0);
-    *ptr = 5;
-#elif defined(__APPLE__)
-    int fd = open("signalmanager_test_tmpfile", O_CREAT, 0700);
+    int fd = open("signalmanager_test_tmpfile", O_CREAT | O_RDWR, 0700);
+    unlink("signalmanager_test_tmpfile");
     char *ptr = (char*)mmap(nullptr, 4096, PROT_WRITE, MAP_PRIVATE, fd, 0);
     *ptr = 5;
-#else
-    /* Enable Alignment Checking */
-#if defined(__GNUC__)
-#if defined(__i386__)
-    __asm__(
-        "pushf\n"
-        "orl $0x40000,(%esp)\n"
-        "popf"
-    );
-#elif defined(__x86_64__)
-    __asm__(
-        "pushf\n"
-        "orl $0x40000,(%rsp)\n"
-        "popf"
-    );
-#else
-#define NO_SIGBUS
-#endif
-#else
-#define NO_SIGBUS
-#endif
-    char *cptr = (char*)malloc(sizeof(int) + 1);
-
-    /* Increment the pointer by one, making it misaligned */
-    int *iptr = (int *) ++cptr;
-
-    /* Dereference it as an int pointer, causing an unaligned access */
-
-    *iptr = 42;
-#endif
 }
 
 void reraise_handler(PosixSignalFlags &flags, const siginfo_t *info, void *context) {
