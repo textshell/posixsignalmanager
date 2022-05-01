@@ -22,7 +22,7 @@
 #if defined(__linux__) || !defined(SIGRTMAX)
     #define NUM_SIGNALS NSIG
 #else
-    #if SIGRTMAX > _NSIG
+    #if SIGRTMAX > NSIG
     #define NUM_SIGNALS (SIGRTMAX + 1)
     #else
     #define NUM_SIGNALS NSIG
