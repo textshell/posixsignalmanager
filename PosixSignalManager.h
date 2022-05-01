@@ -63,6 +63,9 @@ public:
 
     void barrier();
 
+public:
+    static int classifySignal(int signo);
+
 public: // internal interface
     int addSignalNotifier(int signo, PosixSignalNotifier* notifier);
 

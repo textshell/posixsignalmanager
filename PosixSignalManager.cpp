@@ -96,6 +96,58 @@ namespace {
         syncTerminationHandlers.store(nullptr, std::memory_order_seq_cst);
     }
 
+    void PosixSignalManager_classify_signo(int signo, bool *isTermination, bool *isCrash) {
+        *isTermination = false;
+        *isCrash = false;
+
+        switch (signo) {
+            case SIGABRT:
+            case SIGALRM:
+            case SIGFPE:
+            case SIGHUP:
+            case SIGINT:
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__) && !defined(__NetBSD__)
+            // ^^^ various bsds ignore sigio by default
+            case SIGIO:
+#endif
+            case SIGPIPE:
+            case SIGPROF:
+#if defined(SIGPWR) && !defined(__NetBSD__)
+            case SIGPWR:
+#endif
+            case SIGQUIT:
+#ifdef SIGSTKFLT
+            case SIGSTKFLT:
+#endif
+            case SIGSYS:
+            case SIGTERM:
+            case SIGTRAP:
+            case SIGUSR1:
+            case SIGUSR2:
+            case SIGVTALRM:
+            case SIGXCPU:
+            case SIGXFSZ:
+                *isTermination = true;
+                break;
+#if defined(SIGEMT)
+            case SIGEMT:
+#endif
+            case SIGBUS:
+            case SIGILL:
+            case SIGSEGV:
+                *isCrash = true;
+                break;
+            default:
+                break;
+        }
+
+#ifdef SIGRTMIN
+        if (signo >= SIGRTMIN && signo <= SIGRTMAX) {
+            *isTermination = true;
+        }
+#endif
+    }
+
     void PosixSignalManager_sigdie(const char *msg, int code) {
         write(2, msg, strlen(msg));
         if (code) {
@@ -154,53 +206,7 @@ namespace {
 
         bool isTermination = false;
         bool isCrash = false;
-
-        switch (signo) {
-            case SIGABRT:
-            case SIGALRM:
-            case SIGFPE:
-            case SIGHUP:
-            case SIGINT:
-#if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__) && !defined(__NetBSD__)
-            // ^^^ various bsds ignore sigio by default
-            case SIGIO:
-#endif
-            case SIGPIPE:
-            case SIGPROF:
-#if defined(SIGPWR) && !defined(__NetBSD__)
-            case SIGPWR:
-#endif
-            case SIGQUIT:
-#ifdef SIGSTKFLT
-            case SIGSTKFLT:
-#endif
-            case SIGSYS:
-            case SIGTERM:
-            case SIGTRAP:
-            case SIGUSR1:
-            case SIGUSR2:
-            case SIGVTALRM:
-            case SIGXCPU:
-            case SIGXFSZ:
-                isTermination = true;
-                break;
-#if defined(SIGEMT)
-            case SIGEMT:
-#endif
-            case SIGBUS:
-            case SIGILL:
-            case SIGSEGV:
-                isCrash = true;
-                break;
-            default:
-                break;
-        }
-
-#ifdef SIGRTMIN
-        if (signo >= SIGRTMIN && signo <= SIGRTMAX) {
-            isTermination = true;
-        }
-#endif
+        PosixSignalManager_classify_signo(signo, &isTermination, &isCrash);
 
         asyncSignalHandlerRunning.fetch_add(1, std::memory_order_seq_cst);
 
@@ -632,6 +638,13 @@ void PosixSignalManager::barrier() {
     while (asyncSignalHandlerRunning.load(std::memory_order_seq_cst) != 0) {
         // spin wait until no signal handler is running
     }
+}
+
+int PosixSignalManager::classifySignal(int signo) {
+    bool isTermination = false;
+    bool isCrash = false;
+    PosixSignalManager_classify_signo(signo, &isTermination, &isCrash);
+    return ((isTermination || isCrash) ? 1 : 0) | (isCrash ? 2 : 0);
 }
 
 int PosixSignalManager::addSignalNotifier(int signo, PosixSignalNotifier *notifier) {

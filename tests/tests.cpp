@@ -90,6 +90,7 @@ struct shared_page {
     enum { notcalled, termination, sync, notify } type = notcalled;
     std::atomic<int> sig_count{0};
     siginfo_t info;
+    int misc = 0;
 };
 
 shared_page *shared = nullptr;
@@ -202,6 +203,60 @@ void termination_handler(const siginfo_t *info, void *context) {
     CHECK(info.si_status == retno)
 
 #endif
+
+#ifdef NSIG
+#if defined(__linux__) || !defined(SIGRTMAX)
+    #define NUM_SIGNALS NSIG
+#else
+    #if SIGRTMAX > NSIG
+    #define NUM_SIGNALS (SIGRTMAX + 1)
+    #else
+    #define NUM_SIGNALS NSIG
+    #endif
+#endif
+#else
+#error missing signal number macro
+#endif
+
+TEST_CASE( "signal classification" ) {
+    int signo = GENERATE(range(1, NUM_SIGNALS));
+    CAPTURE(signo);
+    if (signo == SIGKILL || signo == SIGSTOP || signo == SIGTSTP || signo == SIGTTIN || signo == SIGTTOU) {
+        // all these are special, classification does not cover this, so just skip.
+        return;
+    }
+#ifdef SIGRTMIN
+    if (signo > NSIG && signo < SIGRTMIN) {
+        // There can be a gap between no real time signals and realtime signals. This is e.g. the case with freebsd.
+        return;
+    }
+#endif
+    int classification = PosixSignalManager::classifySignal(signo);
+    CAPTURE(classification);
+    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+    REQUIRE(shared != MAP_FAILED);
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        if (shared->misc == 1) {
+            HAS_EXITED_WITH(11);
+        } else if (classification > 0) {
+            WAS_SIGNALED_WITH(signo);
+        } else {
+            HAS_EXITED_WITH(99);
+        }
+    } else {
+        if (signal(signo, SIG_DFL) == SIG_ERR) {
+            // Certain signal numbers don't really exist or are reserved for libc/OS usage. Skip those.
+            shared->misc = 1;
+            _exit(11);
+        }
+        raise(signo);
+        _exit(99);
+    }
+    REQUIRE(!munmap(shared, sizeof(shared_page)));
+}
 
 TEST_CASE( "baseline sigsegv" ) {
     pid_t pid = fork();
@@ -576,6 +631,7 @@ TEST_CASE( "reraise sigbus" ) {
 #if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__) && !defined(__NetBSD__)
 // ^^^ on {freebsd,openbsd,apple,netbsd} sigio is ignored by default, so reraise will not kill the child
 TEST_CASE( "reraise sigio" ) {
+    REQUIRE(PosixSignalManager::classifySignal(SIGIO) > 0);
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
     shared->caught_signal.store(0);
@@ -622,6 +678,7 @@ bad:
 }
 #else
 TEST_CASE( "check sigio" ) {
+    REQUIRE(PosixSignalManager::classifySignal(SIGIO) == 0);
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
     shared->caught_signal.store(0);
