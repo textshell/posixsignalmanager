@@ -96,9 +96,10 @@ namespace {
         syncTerminationHandlers.store(nullptr, std::memory_order_seq_cst);
     }
 
-    void PosixSignalManager_classify_signo(int signo, bool *isTermination, bool *isCrash) {
+    void PosixSignalManager_classify_signo(int signo, bool *isTermination, bool *isCrash, bool *specialEffect) {
         *isTermination = false;
         *isCrash = false;
+        *specialEffect = false;
 
         switch (signo) {
             case SIGABRT:
@@ -137,6 +138,10 @@ namespace {
             case SIGSEGV:
                 *isCrash = true;
                 break;
+            case SIGTSTP:
+            case SIGTTIN:
+            case SIGTTOU:
+                *specialEffect = true;
             default:
                 break;
         }
@@ -206,7 +211,8 @@ namespace {
 
         bool isTermination = false;
         bool isCrash = false;
-        PosixSignalManager_classify_signo(signo, &isTermination, &isCrash);
+        bool specialEffect = false;
+        PosixSignalManager_classify_signo(signo, &isTermination, &isCrash, &specialEffect);
 
         asyncSignalHandlerRunning.fetch_add(1, std::memory_order_seq_cst);
 
@@ -300,7 +306,7 @@ namespace {
                     }
                 }
 #endif
-            } else {
+            } else if (isCrash || isTermination || specialEffect) {
                 // trigger default signal handling.
                 newAction.sa_handler = SIG_DFL;
                 newAction.sa_flags = 0;
@@ -643,7 +649,8 @@ void PosixSignalManager::barrier() {
 int PosixSignalManager::classifySignal(int signo) {
     bool isTermination = false;
     bool isCrash = false;
-    PosixSignalManager_classify_signo(signo, &isTermination, &isCrash);
+    bool specialEffect = false;
+    PosixSignalManager_classify_signo(signo, &isTermination, &isCrash, &specialEffect);
     return ((isTermination || isCrash) ? 1 : 0) | (isCrash ? 2 : 0);
 }
 
