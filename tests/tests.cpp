@@ -560,6 +560,8 @@ TEST_CASE( "reraise sigbus" ) {
         WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGBUS);
         CHECK(shared->sig_count == 1);
+        CHECK(shared->caught_signal.load() == SIGBUS);
+        CHECK(shared->type == shared_page::sync);
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGBUS, &reraise_handler);
@@ -698,6 +700,8 @@ TEST_CASE( "reraise sigill" ) {
         WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGILL);
         CHECK(shared->sig_count == 1);
+        CHECK(shared->caught_signal.load() == SIGILL);
+        CHECK(shared->type == shared_page::sync);
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGILL, &reraise_handler);
@@ -729,6 +733,8 @@ TEST_CASE( "reraise sigfpe" ) {
         WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGFPE);
         CHECK(shared->sig_count == 1);
+        CHECK(shared->caught_signal.load() == SIGFPE);
+        CHECK(shared->type == shared_page::sync);
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGFPE, &reraise_handler);
@@ -762,6 +768,8 @@ TEST_CASE( "reraise sigtrap" ) {
         WAIT_CHILD;
         WAS_SIGNALED_WITH(SIGTRAP);
         CHECK(shared->sig_count == 1);
+        CHECK(shared->caught_signal.load() == SIGTRAP);
+        CHECK(shared->type == shared_page::sync);
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGTRAP, &reraise_handler);
