@@ -175,7 +175,7 @@ void debugout(const char* s) {
 #define WAIT_CHILD                         \
     int info;                              \
     errno = 0;                             \
-    int r = waitpid(WAIT_ANY, &info, 0);   \
+    int r = waitpid(WAIT_ANY, &info, WUNTRACED | WCONTINUED);   \
     INFO("info=" << std::hex << info);     \
     REQUIRE(r != -1)
 
@@ -188,6 +188,14 @@ void debugout(const char* s) {
     CHECK(r == pid);                    \
     CHECK(WIFEXITED(info));             \
     CHECK(WEXITSTATUS(info) == retno)
+
+#define WAS_STOPPED(signo)              \
+    CHECK(r == pid);                    \
+    CHECK(WIFSTOPPED(info));
+
+#define WAS_CONTINUED(signo)            \
+    CHECK(r == pid);                    \
+    CHECK(WIFCONTINUED(info));
 
 #else
 
@@ -202,10 +210,20 @@ void debugout(const char* s) {
     CHECK(info.si_code == CLD_KILLED);  \
     CHECK(info.si_status == signo)
 
-#define HAS_EXITED_WITH(retno)        \
+#define HAS_EXITED_WITH(retno)          \
     CHECK(info.si_pid == pid);          \
     CHECK(info.si_code == CLD_EXITED);  \
     CHECK(info.si_status == retno)
+
+#define WAS_STOPPED(signo)              \
+    CHECK(info.si_pid == pid);          \
+    CHECK(info.si_code == CLD_STOPPED); \
+    CHECK(info.si_status == signo)
+
+#define WAS_CONTINUED(signo)              \
+    CHECK(info.si_pid == pid);            \
+    CHECK(info.si_code == CLD_CONTINUED); \
+    CHECK(info.si_status == signo)
 
 #endif
 
@@ -1070,6 +1088,47 @@ TEST_CASE( "notify (sighup)" ) {
         raise(SIGHUP);
         app.exec();
         _exit(42);
+    }
+    REQUIRE(!munmap(shared, sizeof(shared_page)));
+}
+
+TEST_CASE( "reraise TSTP/TTIN/TTOU" ) {
+    int signo = GENERATE(SIGTSTP, SIGTTIN, SIGTTOU);
+    CAPTURE(signo);
+    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+    REQUIRE(shared != MAP_FAILED);
+    shared->caught_signal.store(0);
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        WAS_STOPPED(signo);
+        CHECK(shared->sig_count == 1);
+        CHECK(shared->type == shared_page::sync);
+        CHECK(shared->caught_signal.load() == signo);
+        kill(pid, SIGCONT);
+        {
+            WAIT_CHILD;
+            WAS_CONTINUED(SIGCONT);
+            CHECK(shared->sig_count == 1);
+        }
+        shared->misc = 1;
+        {
+            WAIT_CHILD;
+            HAS_EXITED_WITH(99);
+            CHECK(shared->sig_count == 1);
+        }
+    } else {
+        // Make sure that this process is not in a orphaned process group, because that would disable these signal's action.
+        setpgid(0, 0);
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncSignalHandler(signo, &reraise_handler);
+        raise(signo);
+        int timelimit = 100;
+        while (!shared->misc && timelimit-- > 0) {
+            usleep(100000);
+        }
+        _exit(99);
     }
     REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
