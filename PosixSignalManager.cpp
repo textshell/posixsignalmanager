@@ -102,9 +102,7 @@ namespace {
         *specialEffect = false;
 
         switch (signo) {
-            case SIGABRT:
             case SIGALRM:
-            case SIGFPE:
             case SIGHUP:
             case SIGINT:
 #if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__) && !defined(__NetBSD__)
@@ -120,9 +118,7 @@ namespace {
 #ifdef SIGSTKFLT
             case SIGSTKFLT:
 #endif
-            case SIGSYS:
             case SIGTERM:
-            case SIGTRAP:
             case SIGUSR1:
             case SIGUSR2:
             case SIGVTALRM:
@@ -136,6 +132,10 @@ namespace {
             case SIGBUS:
             case SIGILL:
             case SIGSEGV:
+            case SIGABRT:
+            case SIGFPE:
+            case SIGSYS:
+            case SIGTRAP:
                 *isCrash = true;
                 break;
             case SIGTSTP:
@@ -502,9 +502,7 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
     addToRoot(newNode, syncTerminationHandlers);
 
 
-    installIfDefault(SIGABRT);
     installIfDefault(SIGALRM);
-    installIfDefault(SIGFPE);
     installIfDefault(SIGHUP);
     installIfDefault(SIGINT);
 #if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__) && !defined(__NetBSD__)
@@ -520,9 +518,7 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
 #ifdef SIGSTKFLT
     installIfDefault(SIGSTKFLT);
 #endif
-    installIfDefault(SIGSYS);
     installIfDefault(SIGTERM);
-    installIfDefault(SIGTRAP);
     installIfDefault(SIGUSR1);
     installIfDefault(SIGUSR2);
     installIfDefault(SIGVTALRM);
@@ -557,6 +553,10 @@ int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationH
     installIfDefault(SIGBUS);
     installIfDefault(SIGILL);
     installIfDefault(SIGSEGV);
+    installIfDefault(SIGABRT);
+    installIfDefault(SIGFPE);
+    installIfDefault(SIGSYS);
+    installIfDefault(SIGTRAP);
 
     return newNode->id;
 }
