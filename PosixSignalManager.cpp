@@ -32,6 +32,15 @@
 #error missing signal number macro
 #endif
 
+#ifdef __cpp_lib_atomic_is_always_lock_free
+#define STATIC_ASSERT_ALWAYS_LOCKFREE(type) static_assert (type::is_always_lock_free)
+#else
+#define STATIC_ASSERT_ALWAYS_LOCKFREE(type) /* not supported */
+#endif
+
+STATIC_ASSERT_ALWAYS_LOCKFREE(std::atomic<void*>);
+STATIC_ASSERT_ALWAYS_LOCKFREE(std::atomic<int>);
+
 // POSIX requires write(2) on a O_NONBLOCK pipe to be atomic with payloads smaller than PIPE_BUF, which we depend
 // on for siginfo_t.
 static_assert (sizeof(siginfo_t) < PIPE_BUF, "siginfo_t is bigger than limit for atomic pipe writes");
