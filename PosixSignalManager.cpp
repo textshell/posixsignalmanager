@@ -416,7 +416,7 @@ void PosixSignalNotifier::_readyRead(int socket) {
 
 class PosixSignalManagerPrivate {
 public:
-    QMutex mutex;
+    static QMutex mutex;
     QMap<int, Node*> idMap;
     int nextId = 1;
 
@@ -435,12 +435,16 @@ public:
     }
 };
 
+QMutex PosixSignalManagerPrivate::mutex;
+
 PosixSignalManager::PosixSignalManager()
     : impl(new PosixSignalManagerPrivate())
 {
 }
 
 PosixSignalManager *PosixSignalManager::create() {
+    QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
+
     if (::instance) {
         qDebug() << "PosixSignalManager::create: Already created";
         throw std::runtime_error("PosixSignalManager::create: Already created");
@@ -452,6 +456,8 @@ PosixSignalManager *PosixSignalManager::create() {
 }
 
 PosixSignalManager *PosixSignalManager::instance() {
+    QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
+
     if (!::instance) {
         qDebug() << "PosixSignalManager::instance: Called before PosixSignalManager::create";
         throw std::runtime_error("PosixSignalManager::instance: Called before PosixSignalManager::create");
@@ -460,6 +466,7 @@ PosixSignalManager *PosixSignalManager::instance() {
 }
 
 bool PosixSignalManager::isCreated() {
+    QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     return ::instance != nullptr;
 }
 
@@ -498,8 +505,8 @@ namespace {
 }
 
 int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTerminationHandler handler) {
+    QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
-    QMutexLocker locker(&d->mutex);
 
     SyncTerminationHandlerNode* newNode = new SyncTerminationHandlerNode();
     // lifetime is complicated. FIXME document more?
@@ -544,8 +551,8 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
 }
 
 int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationHandler handler) {
+    QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
-    QMutexLocker locker(&d->mutex);
 
     SyncTerminationHandlerNode* newNode = new SyncTerminationHandlerNode();
     // lifetime is complicated. FIXME document more?
@@ -571,8 +578,8 @@ int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationH
 }
 
 int PosixSignalManager::addSyncSignalHandler(int signo, PosixSignalManager::SyncHandler handler) {
+    QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
-    QMutexLocker locker(&d->mutex);
     if (signo > NUM_SIGNALS || signo < 1) {
         // error
         return -1;
@@ -623,8 +630,8 @@ namespace {
 
 
 void PosixSignalManager::removeHandler(int id) {
+    QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
-    QMutexLocker locker(&d->mutex);
     if (!d->idMap.contains(id)) {
         qDebug() << "PosixSignalManager::removeHandler: Id " << id << " does not exist";
         throw std::runtime_error("PosixSignalManager::removeHandler: Id does not exist");
@@ -664,8 +671,8 @@ int PosixSignalManager::classifySignal(int signo) {
 }
 
 int PosixSignalManager::addSignalNotifier(int signo, PosixSignalNotifier *notifier) {
+    QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
-    QMutexLocker locker(&d->mutex);
 
     if (signo > NUM_SIGNALS || signo < 1) {
         // error
