@@ -63,6 +63,14 @@ int main( int argc, char* argv[] ) {
     }
 #endif
 
+    printf("NSIG: %d, SIGRTMAX: %d\n", NSIG,
+#ifdef SIGRTMAX
+           SIGRTMAX
+#else
+           -1
+#endif
+           );
+
     // Reset signal handling state to all default and nothing blocked
 
     sigset_t newmask, oldmask;
