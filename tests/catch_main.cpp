@@ -8,6 +8,7 @@
 
 #include <sys/resource.h>
 #include <sys/wait.h>
+#include <signal.h>
 
 #ifdef __linux__
 #include <sys/prctl.h>
@@ -62,5 +63,16 @@ int main( int argc, char* argv[] ) {
     }
 #endif
 
+    // Reset signal handling state to all default and nothing blocked
+
+    sigset_t newmask, oldmask;
+    sigemptyset(&newmask);
+    sigprocmask(SIG_SETMASK, &newmask, &oldmask);
+    for (int i = 1; i < NSIG; i++) {
+        signal(i, SIG_DFL);
+        if (sigismember(&oldmask, i)) {
+            printf("signal masked %d\n", i);
+        }
+    }
     return Catch::Session().run( argc, argv );
 }
