@@ -295,7 +295,7 @@ namespace {
                 }
 
 #ifdef __linux__
-                if (1) {
+                if (0) {
                     // Workaround for linux io event masquerading as SIGSEGV etc
                     timer_t timerid;
                     sigevent sev;
