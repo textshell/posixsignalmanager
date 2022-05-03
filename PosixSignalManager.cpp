@@ -22,7 +22,7 @@
 #if defined(__linux__) || !defined(SIGRTMAX)
     #define NUM_SIGNALS NSIG
 #else
-    #if SIGRTMAX > NSIG
+    #if (SIGRTMAX + 1) > NSIG
     #define NUM_SIGNALS (SIGRTMAX + 1)
     #else
     #define NUM_SIGNALS NSIG
@@ -191,7 +191,7 @@ namespace {
     }
 
     void PosixSignalManager_handler(int signo, siginfo_t *info, void *context) {
-        if (signo > NUM_SIGNALS) {
+        if (signo >= NUM_SIGNALS) {
             // avoid buffer overlow in code below, should never happen:
             // signo < NUM_SIGNALS should always be true because we don't set this handler for anything higher
             return;
@@ -580,7 +580,7 @@ int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationH
 int PosixSignalManager::addSyncSignalHandler(int signo, PosixSignalManager::SyncHandler handler) {
     QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
-    if (signo > NUM_SIGNALS || signo < 1) {
+    if (signo >= NUM_SIGNALS || signo < 1) {
         // error
         return -1;
     }
@@ -674,7 +674,7 @@ int PosixSignalManager::addSignalNotifier(int signo, PosixSignalNotifier *notifi
     QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
 
-    if (signo > NUM_SIGNALS || signo < 1) {
+    if (signo >= NUM_SIGNALS || signo < 1) {
         // error
         return -1;
     }
