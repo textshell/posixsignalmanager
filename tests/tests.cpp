@@ -165,6 +165,11 @@ void termination_handler(const siginfo_t *info, void *context) {
     shared->caught_signal.store(info->si_signo);
 }
 
+void debugout(const char* s) {
+    write(55, s, strlen(s));
+    write(55, "\n", 1);
+}
+
 #if defined(__OpenBSD__) || defined(__APPLE__)
 
 #define WAIT_CHILD                         \

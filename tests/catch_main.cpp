@@ -74,5 +74,9 @@ int main( int argc, char* argv[] ) {
             printf("signal masked %d\n", i);
         }
     }
+
+    // Stash away stderr somewhere to go around redirections in test framework.
+    dup2(1, 55);
+
     return Catch::Session().run( argc, argv );
 }
