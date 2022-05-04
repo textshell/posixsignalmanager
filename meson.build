@@ -49,6 +49,10 @@ if not meson.is_subproject()
   endif
 
   testlib = static_library('testlib', 'tests/catch_main.cpp', dependencies: [catch2_dep])
+  testdep_socket = []
+  if host_machine.system() == 'sunos'
+    testdep_socket = cxx.find_library('socket')
+  endif
   test('tests', executable('tests', 'tests/tests.cpp', link_with: [testlib],
-       dependencies: [posixsignalmanager_dep, qt5_dep, librt, catch2_dep]))
+       dependencies: [posixsignalmanager_dep, qt5_dep, librt, catch2_dep, testdep_socket]))
 endif

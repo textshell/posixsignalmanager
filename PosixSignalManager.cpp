@@ -19,7 +19,7 @@
 #include <QSocketNotifier>
 
 #ifdef NSIG
-#if defined(__linux__) || !defined(SIGRTMAX)
+#if defined(__linux__) || !defined(SIGRTMAX) || defined(__sun)
     #define NUM_SIGNALS NSIG
 #else
     #if (SIGRTMAX + 1) > NSIG
@@ -120,7 +120,7 @@ namespace {
 #endif
             case SIGPIPE:
             case SIGPROF:
-#if defined(SIGPWR) && !defined(__NetBSD__)
+#if defined(SIGPWR) && !defined(__NetBSD__) && !defined(__sun)
             case SIGPWR:
 #endif
             case SIGQUIT:
@@ -133,6 +133,9 @@ namespace {
             case SIGVTALRM:
             case SIGXCPU:
             case SIGXFSZ:
+#ifdef SIGLOST
+            case SIGLOST:
+#endif
                 *isTermination = true;
                 break;
 #if defined(SIGEMT)

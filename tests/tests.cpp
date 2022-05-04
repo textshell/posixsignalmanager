@@ -6,12 +6,16 @@
 #include <mqueue.h>
 #endif
 #include <unistd.h>
+#include <stdio.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
 #include <signal.h>
+#if defined(__sun)
+#include <sys/stropts.h>
+#endif
 
 #define CATCH_CONFIG_EXTERNAL_INTERFACES
 #define CATCH_CONFIG_NO_POSIX_SIGNALS
@@ -63,6 +67,7 @@ struct SaneStateListener : Catch::TestEventListenerBase {
 };
 CATCH_REGISTER_LISTENER(SaneStateListener)
 
+#ifdef __linux__
 bool isLinux() {
     utsname uts;
     uname(&uts);
@@ -84,6 +89,7 @@ QVector<int> utsRelease() {
     }
     return r;
 }
+#endif
 
 struct shared_page {
     std::atomic<int> caught_signal;
@@ -144,10 +150,25 @@ void cause_sigtrap() {
 }
 
 void cause_sigbus() {
+#if !defined(__sun)
     int fd = open("signalmanager_test_tmpfile", O_CREAT | O_RDWR, 0700);
     unlink("signalmanager_test_tmpfile");
     char *ptr = (char*)mmap(nullptr, 4096, PROT_WRITE, MAP_PRIVATE, fd, 0);
     *ptr = 5;
+#else
+    int fd = open("faultfs/always_eio", O_RDONLY, 0700);
+    char *ptr = (char*)mmap(nullptr, 4096, PROT_READ, MAP_PRIVATE, fd, 0);
+    printf("%c\n", *ptr);
+#endif
+}
+
+void checkdeps_sigbus() {
+#if defined(__sun)
+    if (access("faultfs/always_eio", R_OK)) {
+        // see fusefault.c for implementation of this file system.
+        FAIL("Need fault fuse filesystem mounted at \"faultfs/always_eio\".");
+    }
+#endif
 }
 
 void reraise_handler(PosixSignalFlags &flags, const siginfo_t *info, void *context) {
@@ -228,7 +249,7 @@ void debugout(const char* s) {
 #endif
 
 #ifdef NSIG
-#if defined(__linux__) || !defined(SIGRTMAX)
+#if defined(__linux__) || !defined(SIGRTMAX) || defined(__sun)
     #define NUM_SIGNALS NSIG
 #else
     #if SIGRTMAX > NSIG
@@ -328,9 +349,9 @@ TEST_CASE( "reraise 'raised' sigsegv" ) {
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
 #if defined(__OpenBSD__) || defined(__APPLE__)
-#elif !defined(__FreeBSD__) && !defined(__NetBSD__)
+#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__sun)
         CHECK(shared->info.si_code == SI_TKILL);
-#elif defined(__FreeBSD__) || defined(__NetBSD__)
+#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__sun)
         CHECK(shared->info.si_code == SI_LWP);
 #else
         INFO("si_code: " << shared->info.si_code);
@@ -616,6 +637,7 @@ TEST_CASE( "reraise 'aio' sigsegv" ) {
 
 #ifndef NO_SIGBUS
 TEST_CASE( "baseline sigbus" ) {
+    checkdeps_sigbus();
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -630,6 +652,7 @@ TEST_CASE( "baseline sigbus" ) {
 
 #ifndef NO_SIGBUS
 TEST_CASE( "reraise sigbus" ) {
+    checkdeps_sigbus();
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
     REQUIRE(shared != MAP_FAILED);
     pid_t pid = fork();
@@ -651,6 +674,7 @@ TEST_CASE( "reraise sigbus" ) {
 #endif
 
 #if defined(SIGIO)
+// ^^^ on some operating systems SIGIO is an alias to SIGPOLL
 #if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__) && !defined(__NetBSD__)
 // ^^^ on {freebsd,openbsd,apple,netbsd} sigio is ignored by default, so reraise will not kill the child
 TEST_CASE( "reraise sigio" ) {
@@ -686,11 +710,19 @@ TEST_CASE( "reraise sigio" ) {
             goto bad;
         }
 #endif
+        // ioctl FIOASYNC could be an alternative too
+#if !defined(__sun)
         flags = fcntl(0, F_GETFL);
         if (fcntl(sv[0], F_SETFL, flags | O_ASYNC) == -1) {
             perror("setfl async");
             goto bad;
         }
+#else
+        if (ioctl(sv[0], I_SETSIG, S_INPUT)) {
+            perror("I_SETSIG");
+            goto bad;
+        }
+#endif
         write(sv[1], "b", 1);
         pause();
         _exit(99);
@@ -861,7 +893,7 @@ TEST_CASE( "reraise sigtrap" ) {
 #endif
 
 #if defined(SIGIO) && defined(SIGRTMIN) && !defined(__FreeBSD__) && !defined(__OpenBSD__) \
-    && !defined(__NetBSD__)
+    && !defined(__NetBSD__) && !defined(__sun)
 // ^^^ various bsds do not have a way to change the signal for O_ASYNC
 TEST_CASE( "reraise 'io' sigrt" ) {
     shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
@@ -921,7 +953,7 @@ TEST_CASE( "term handler (sighup)" ) {
         CHECK(shared->caught_signal.load() == SIGHUP);
         CHECK(shared->type == shared_page::termination);
 #if defined(__OpenBSD__) || defined(__APPLE__)
-#elif !defined(__FreeBSD__) && !defined(__NetBSD__)
+#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__sun)
         CHECK(shared->info.si_code == SI_TKILL);
 #else
         CHECK(shared->info.si_code == SI_LWP);
@@ -949,7 +981,7 @@ TEST_CASE( "term handler (sigrt)" ) {
         CHECK(shared->caught_signal.load() == SIGRTMIN+1);
         CHECK(shared->type == shared_page::termination);
 #if defined(__OpenBSD__) || defined(__APPLE__)
-#elif !defined(__FreeBSD__) && !defined(__NetBSD__)
+#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__sun)
         CHECK(shared->info.si_code == SI_TKILL);
 #else
         CHECK(shared->info.si_code == SI_LWP);
@@ -1064,7 +1096,7 @@ TEST_CASE( "notify (sighup)" ) {
         CHECK(shared->caught_signal.load() == SIGHUP);
         CHECK(shared->type == shared_page::notify);
 #if defined(__OpenBSD__) || defined(__APPLE__)
-#elif !defined(__FreeBSD__) && !defined(__NetBSD__)
+#elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__sun)
         CHECK(shared->info.si_code == SI_TKILL);
 #else
         CHECK(shared->info.si_code == SI_LWP);
