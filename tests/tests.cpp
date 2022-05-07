@@ -406,6 +406,7 @@ TEST_CASE( "reraise 'queued' sigsegv" ) {
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
         CHECK(shared->info.si_code == SI_QUEUE);
+        CHECK(shared->info.si_value.sival_int == 42);
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
@@ -548,6 +549,7 @@ TEST_CASE( "reraise 'mq' sigsegv" ) {
         CHECK(shared->caught_signal.load() == SIGSEGV);
         CHECK(shared->type == shared_page::sync);
         CHECK(shared->info.si_code == SI_MESGQ);
+        CHECK(shared->info.si_value.sival_int == 42);
     } else {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
@@ -601,6 +603,7 @@ TEST_CASE( "reraise 'aio' sigsegv" ) {
 #if defined(__APPLE__)
 #else
         CHECK(shared->info.si_code == SI_ASYNCIO);
+        CHECK(shared->info.si_value.sival_int == 42);
 #endif
     } else {
         PosixSignalManager::create();
