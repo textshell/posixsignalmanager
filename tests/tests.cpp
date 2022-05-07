@@ -563,19 +563,12 @@ TEST_CASE( "reraise 'mq' sigsegv" ) {
         //mq_unlink(name);
         sigevent sev;
         sev.sigev_notify = SIGEV_SIGNAL;
-        sev.sigev_signo = 11;
+        sev.sigev_signo = SIGSEGV;
         sev.sigev_value.sival_int = 42;
         if (mq_notify(mqdes, &sev) == -1) {
             perror("mq_notify");
             _exit(98);
         }
-        sev.sigev_notify = SIGEV_SIGNAL;
-        sev.sigev_signo = SIGSEGV;
-        sev.sigev_value.sival_int = 42;
-        //if (mq_notify(mqdes, &sev) == -1) {
-            //perror("mq_notify");
-            //_exit(98);
-        //}
         if (mq_send(mqdes, "test", 4, 0) == -1) {
             perror("mq_send");
             _exit(98);
