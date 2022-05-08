@@ -94,9 +94,14 @@ QVector<int> utsRelease() {
 struct shared_page {
     std::atomic<int> caught_signal;
     enum { notcalled, termination, sync, notify } type = notcalled;
-    std::atomic<int> sig_count{0};
+    std::atomic<int> sig_count;
     siginfo_t info;
     int misc = 0;
+
+    shared_page() {
+        caught_signal.store(0);
+        sig_count.store(0);
+    }
 };
 
 shared_page *shared = nullptr;
@@ -191,6 +196,22 @@ void debugout(const char* s) {
     write(55, "\n", 1);
 }
 
+struct SharedPageAlloc {
+    SharedPageAlloc() {
+        shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+        REQUIRE(shared != MAP_FAILED);
+        new (shared) shared_page();
+    }
+
+    ~SharedPageAlloc() {
+        if (munmap(shared, sizeof(shared_page)) != 0) {
+            debugout("Failed to unmap communication page");
+            abort();
+        }
+        shared = nullptr;
+    }
+};
+
 #if defined(__OpenBSD__) || defined(__APPLE__)
 
 #define WAIT_CHILD                         \
@@ -277,8 +298,7 @@ TEST_CASE( "signal classification" ) {
 #endif
     int classification = PosixSignalManager::classifySignal(signo);
     CAPTURE(classification);
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -299,7 +319,6 @@ TEST_CASE( "signal classification" ) {
         raise(signo);
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
 TEST_CASE( "baseline sigsegv" ) {
@@ -315,9 +334,7 @@ TEST_CASE( "baseline sigsegv" ) {
 }
 
 TEST_CASE( "reraise sigsegv" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -333,13 +350,10 @@ TEST_CASE( "reraise sigsegv" ) {
         cause_sigsegv();
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
 TEST_CASE( "reraise 'raised' sigsegv" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -363,13 +377,10 @@ TEST_CASE( "reraise 'raised' sigsegv" ) {
         raise(SIGSEGV);
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
 TEST_CASE( "reraise 'killed' sigsegv" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -388,15 +399,12 @@ TEST_CASE( "reraise 'killed' sigsegv" ) {
         kill(getpid(), SIGSEGV);
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
 #if defined(SIGRTMIN)
 // ^^^ sigqueue depends on realtime signals
 TEST_CASE( "reraise 'queued' sigsegv" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -415,7 +423,6 @@ TEST_CASE( "reraise 'queued' sigsegv" ) {
         sigqueue(getpid(), SIGSEGV, sv);
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #endif
 
@@ -427,9 +434,7 @@ TEST_CASE( "reraise 'io' sigsegv" ) {
         linux_pre_4_14 = true;
     }
 
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -471,16 +476,13 @@ TEST_CASE( "reraise 'io' sigsegv" ) {
 bad:
         _exit(98);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #endif
 
 #if defined(SIGRTMIN)
 // ^^^ timer_create depends on realtime signals
 TEST_CASE( "reraise 'timer' sigsegv" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -514,7 +516,6 @@ TEST_CASE( "reraise 'timer' sigsegv" ) {
         pause();
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #endif
 
@@ -537,9 +538,7 @@ TEST_CASE( "mqueue not implemented" ) {
 
 #if HAVE_MQ
 TEST_CASE( "reraise 'mq' sigsegv" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -576,15 +575,12 @@ TEST_CASE( "reraise 'mq' sigsegv" ) {
         pause();
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #endif
 
 #if __has_include(<aio.h>)
 TEST_CASE( "reraise 'aio' sigsegv" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -627,7 +623,6 @@ TEST_CASE( "reraise 'aio' sigsegv" ) {
         pause();
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #endif
 
@@ -649,8 +644,7 @@ TEST_CASE( "baseline sigbus" ) {
 #ifndef NO_SIGBUS
 TEST_CASE( "reraise sigbus" ) {
     checkdeps_sigbus();
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -665,7 +659,6 @@ TEST_CASE( "reraise sigbus" ) {
         cause_sigbus();
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #endif
 
@@ -675,9 +668,7 @@ TEST_CASE( "reraise sigbus" ) {
 // ^^^ on {freebsd,openbsd,apple,netbsd} sigio is ignored by default, so reraise will not kill the child
 TEST_CASE( "reraise sigio" ) {
     REQUIRE(PosixSignalManager::classifySignal(SIGIO) > 0);
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -725,14 +716,11 @@ TEST_CASE( "reraise sigio" ) {
 bad:
         _exit(98);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #else
 TEST_CASE( "check sigio" ) {
     REQUIRE(PosixSignalManager::classifySignal(SIGIO) == 0);
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -779,7 +767,6 @@ TEST_CASE( "check sigio" ) {
 bad:
         _exit(98);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #endif
 #endif
@@ -800,8 +787,7 @@ TEST_CASE( "baseline sigill" ) {
 
 #ifndef NO_SIGILL
 TEST_CASE( "reraise sigill" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -816,7 +802,6 @@ TEST_CASE( "reraise sigill" ) {
         cause_sigill();
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #endif
 
@@ -833,8 +818,7 @@ TEST_CASE( "baseline sigfpe" ) {
 }
 
 TEST_CASE( "reraise sigfpe" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -849,7 +833,6 @@ TEST_CASE( "reraise sigfpe" ) {
         cause_sigfpe();
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
 #ifndef NO_SIGTRAP
@@ -868,8 +851,7 @@ TEST_CASE( "baseline sigtrap" ) {
 
 #ifndef NO_SIGTRAP
 TEST_CASE( "reraise sigtrap" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -884,7 +866,6 @@ TEST_CASE( "reraise sigtrap" ) {
         cause_sigtrap();
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #endif
 
@@ -892,9 +873,7 @@ TEST_CASE( "reraise sigtrap" ) {
     && !defined(__NetBSD__) && !defined(__sun)
 // ^^^ various bsds do not have a way to change the signal for O_ASYNC
 TEST_CASE( "reraise 'io' sigrt" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -932,14 +911,11 @@ TEST_CASE( "reraise 'io' sigrt" ) {
 bad:
         _exit(98);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #endif
 
 TEST_CASE( "term handler (sighup)" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -960,14 +936,11 @@ TEST_CASE( "term handler (sighup)" ) {
         raise(SIGHUP);
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
 #if defined(SIGRTMIN)
 TEST_CASE( "term handler (sigrt)" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -988,14 +961,11 @@ TEST_CASE( "term handler (sigrt)" ) {
         raise(SIGRTMIN+1);
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 #endif
 
 TEST_CASE( "ignored term handler (sighup)" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -1010,13 +980,10 @@ TEST_CASE( "ignored term handler (sighup)" ) {
         raise(SIGHUP);
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
 TEST_CASE( "removed term handler (sighup)" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -1032,13 +999,10 @@ TEST_CASE( "removed term handler (sighup)" ) {
         raise(SIGHUP);
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
 TEST_CASE( "crash handler (sigsegv)" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -1054,13 +1018,10 @@ TEST_CASE( "crash handler (sigsegv)" ) {
         cause_sigsegv();
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
 TEST_CASE( "removed crash handler (sigsegv)" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -1076,13 +1037,10 @@ TEST_CASE( "removed crash handler (sigsegv)" ) {
         cause_sigsegv();
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
 TEST_CASE( "notify (sighup)" ) {
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -1117,15 +1075,12 @@ TEST_CASE( "notify (sighup)" ) {
         app.exec();
         _exit(42);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
 
 TEST_CASE( "reraise TSTP/TTIN/TTOU" ) {
     int signo = GENERATE(SIGTSTP, SIGTTIN, SIGTTOU);
     CAPTURE(signo);
-    shared = static_cast<shared_page*>(mmap(nullptr, sizeof(shared_page), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
-    REQUIRE(shared != MAP_FAILED);
-    shared->caught_signal.store(0);
+    SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -1158,5 +1113,4 @@ TEST_CASE( "reraise TSTP/TTIN/TTOU" ) {
         }
         _exit(99);
     }
-    REQUIRE(!munmap(shared, sizeof(shared_page)));
 }
