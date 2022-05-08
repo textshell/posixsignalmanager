@@ -104,6 +104,7 @@ namespace {
             signalStates[i].handlerInstalled = false;
         }
         syncTerminationHandlers.store(nullptr, std::memory_order_seq_cst);
+        syncCrashHandlers.store(nullptr, std::memory_order_seq_cst);
     }
 
     void PosixSignalManager_classify_signo(int signo, bool *isTermination, bool *isCrash, bool *specialEffect) {
@@ -468,7 +469,6 @@ PosixSignalManager *PosixSignalManager::create() {
     if (::instance) {
         qDebug() << "PosixSignalManager::create: Already created";
         throw std::runtime_error("PosixSignalManager::create: Already created");
-        return ::instance;
     }
     PosixSignalManager_init();
     ::instance = new PosixSignalManager();
@@ -656,7 +656,6 @@ void PosixSignalManager::removeHandler(int id) {
     if (!d->idMap.contains(id)) {
         qDebug() << "PosixSignalManager::removeHandler: Id " << id << " does not exist";
         throw std::runtime_error("PosixSignalManager::removeHandler: Id does not exist");
-        return; // bogus id
     }
     Node *n = d->idMap[id];
     d->idMap.remove(id);
