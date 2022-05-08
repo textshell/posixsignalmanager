@@ -77,8 +77,8 @@ namespace {
     };
 
     struct NotifyFdNode : public Node {
-        int write_fd = -1;
-        int read_fd = -1;
+        int write_fd = -1; // only written to in init, readonly after that
+        int read_fd = -1; // only written to in init, readonly after that
         std::atomic<NotifyFdNode*> next;
     };
 
@@ -492,8 +492,7 @@ bool PosixSignalManager::isCreated() {
 
 namespace {
     template<typename T>
-    void addToRoot(T* newNode, std::atomic<T*> &root)
-    {
+    void addToRoot(T* newNode, std::atomic<T*> &root) {  // mainline (locked) access only
         T* node = root.load(std::memory_order_seq_cst);
         if (!node) {
             root.store(newNode, std::memory_order_seq_cst);
@@ -507,7 +506,7 @@ namespace {
         }
     }
 
-    void installIfDefault(int signo) {
+    void installIfDefault(int signo) { // mainline (locked) access only
         if (!signalStates[signo].handlerInstalled) {
             struct sigaction sa;
             sigaction(signo, nullptr, &sa);
@@ -517,7 +516,7 @@ namespace {
         }
     }
 
-    void installIfNeeded(int signo) {
+    void installIfNeeded(int signo) { // mainline (locked) access only
         if (!signalStates[signo].handlerInstalled) {
             PosixSignalManager_install_handler(signo);
         }
@@ -624,8 +623,7 @@ int PosixSignalManager::addSyncSignalHandler(int signo, PosixSignalManager::Sync
 
 namespace {
     template<typename T>
-    void removeAndFreeHandler(Node *n, int id, std::atomic<T*> &root)
-    {
+    void removeAndFreeHandler(Node *n, int id, std::atomic<T*> &root) {  // mainline (locked) access only
         T *nodeToRemove = static_cast<T*>(n);
         T *node = root.load(std::memory_order_seq_cst);
         if (node == nodeToRemove) {
