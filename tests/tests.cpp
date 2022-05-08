@@ -1228,3 +1228,44 @@ TEST_CASE( "reraise TSTP/TTIN/TTOU" ) {
         _exit(99);
     }
 }
+
+TEST_CASE( "brute force 'killed' reraise" ) {
+    int signo = GENERATE(range(1, NUM_SIGNALS));
+    CAPTURE(signo);
+    if (signo == SIGKILL || signo == SIGSTOP || signo == SIGTSTP || signo == SIGTTIN || signo == SIGTTOU) {
+        // all these are special, classification does not cover this, so just skip.
+        return;
+    }
+#ifdef SIGRTMIN
+    if (signo > NSIG && signo < SIGRTMIN) {
+        // There can be a gap between no real time signals and realtime signals. This is e.g. the case with freebsd.
+        return;
+    }
+#endif
+    int classification = PosixSignalManager::classifySignal(signo);
+    CAPTURE(classification);
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        if (shared->misc == 1) {
+            HAS_EXITED_WITH(11);
+        } else if (classification > 0) {
+            WAS_SIGNALED_WITH(signo);
+        } else {
+            HAS_EXITED_WITH(99);
+        }
+    } else {
+        if (signal(signo, SIG_DFL) == SIG_ERR) {
+            // Certain signal numbers don't really exist or are reserved for libc/OS usage. Skip those.
+            shared->misc = 1;
+            _exit(11);
+        }
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGTRAP, &reraise_handler);
+
+        kill(getpid(), signo);
+        _exit(99);
+    }
+}
