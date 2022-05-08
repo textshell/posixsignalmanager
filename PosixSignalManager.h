@@ -19,11 +19,22 @@ private:
     bool _stopChain = false;
 };
 
+class PosixSignalOptions {
+    friend class PosixSignalManager;
+public:
+    PosixSignalOptions dontFollowForks();
+    PosixSignalOptions followForks();
+
+private:
+    enum { ForkDefault, ForkFollow, ForkNoFollow } _forkFilter = ForkDefault;
+};
+
 class PosixSignalNotifierPrivate;
 class PosixSignalNotifier : public QObject {
     Q_OBJECT
 public:
     PosixSignalNotifier(int signo, QObject *parent = nullptr);
+    PosixSignalNotifier(int signo, const PosixSignalOptions &options, QObject *parent = nullptr);
     ~PosixSignalNotifier() override;
 
 Q_SIGNALS:
@@ -50,11 +61,11 @@ public:
 
 public:
     // SIGINT, SIGTERM etc
-    int addSyncTerminationHandler(SyncTerminationHandler handler);
+    int addSyncTerminationHandler(SyncTerminationHandler handler, const PosixSignalOptions &options = PosixSignalOptions());
     // SIGSEGV etc
-    int addSyncCrashHandler(SyncTerminationHandler handler);
+    int addSyncCrashHandler(SyncTerminationHandler handler, const PosixSignalOptions &options = PosixSignalOptions());
 
-    int addSyncSignalHandler(int signo, SyncHandler handler);
+    int addSyncSignalHandler(int signo, SyncHandler handler, const PosixSignalOptions &options = PosixSignalOptions());
 
     void removeHandler(int id);
 
@@ -67,7 +78,7 @@ public:
     static int classifySignal(int signo);
 
 public: // internal interface
-    int addSignalNotifier(int signo, PosixSignalNotifier* notifier);
+    int addSignalNotifier(int signo, const PosixSignalOptions &options, PosixSignalNotifier* notifier);
 
 private:
     PosixSignalManager();

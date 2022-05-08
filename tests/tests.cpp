@@ -28,6 +28,7 @@
 #include <QVector>
 #include <QCoreApplication>
 #include <QSharedPointer>
+#include <QTimer>
 
 #include "PosixSignalManager.h"
 
@@ -349,6 +350,51 @@ TEST_CASE( "reraise sigsegv" ) {
         PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
         cause_sigsegv();
         _exit(99);
+    }
+}
+
+TEST_CASE( "reraise sigsegv in fork" ) {
+    int follow = GENERATE(0, 1, 2);
+    CAPTURE(follow);
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        HAS_EXITED_WITH(42);
+        if (follow == 0) {
+            CHECK(shared->sig_count == 0);
+        } else {
+            CHECK(shared->sig_count == 1);
+            CHECK(shared->caught_signal.load() == SIGSEGV);
+            CHECK(shared->type == shared_page::sync);
+            CHECK(shared->info.si_code == SEGV_MAPERR);
+        }
+    } else {
+        PosixSignalOptions options;
+        if (follow == 0) {
+            options = PosixSignalOptions().dontFollowForks();
+        } else if (follow == 1) {
+            options = PosixSignalOptions().followForks();
+        }
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler, options);
+
+        pid_t innerPid = fork();
+        if (innerPid == -1) {
+            perror("inner fork");
+            _exit(99);
+        }
+
+        if (innerPid == 0) {
+            cause_sigsegv();
+            _exit(99);
+        }
+
+        int innerStatus;
+        waitpid(innerPid, &innerStatus, 0);
+
+        _exit(42);
     }
 }
 
@@ -1052,6 +1098,50 @@ TEST_CASE( "term handler (sighup)" ) {
     }
 }
 
+TEST_CASE( "term handler (sighup) in fork" ) {
+    int follow = GENERATE(0, 1, 2);
+    CAPTURE(follow);
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        HAS_EXITED_WITH(42);
+        if (follow == 0) {
+            CHECK(shared->sig_count == 0);
+        } else {
+            CHECK(shared->sig_count == 1);
+            CHECK(shared->caught_signal.load() == SIGHUP);
+            CHECK(shared->type == shared_page::termination);
+        }
+    } else {
+        PosixSignalOptions options;
+        if (follow == 0) {
+            options = PosixSignalOptions().dontFollowForks();
+        } else if (follow == 1) {
+            options = PosixSignalOptions().followForks();
+        }
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler, options);
+
+        pid_t innerPid = fork();
+        if (innerPid == -1) {
+            perror("inner fork");
+            _exit(99);
+        }
+
+        if (innerPid == 0) {
+            raise(SIGHUP);
+            _exit(99);
+        }
+
+        int innerStatus;
+        waitpid(innerPid, &innerStatus, 0);
+
+        _exit(42);
+    }
+}
+
 #if defined(SIGRTMIN)
 TEST_CASE( "term handler (sigrt)" ) {
     SharedPageAlloc sharedPageAlloc;
@@ -1134,6 +1224,51 @@ TEST_CASE( "crash handler (sigsegv)" ) {
     }
 }
 
+TEST_CASE( "crash handler (sigsegv) in fork" ) {
+    int follow = GENERATE(0, 1, 2);
+    CAPTURE(follow);
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        HAS_EXITED_WITH(42);
+        if (follow == 0) {
+            CHECK(shared->sig_count == 0);
+        } else {
+            CHECK(shared->sig_count == 1);
+            CHECK(shared->caught_signal.load() == SIGSEGV);
+            CHECK(shared->type == shared_page::termination);
+            CHECK(shared->info.si_code == SEGV_MAPERR);
+        }
+    } else {
+        PosixSignalOptions options;
+        if (follow == 0) {
+            options = PosixSignalOptions().dontFollowForks();
+        } else if (follow == 1) {
+            options = PosixSignalOptions().followForks();
+        }
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncCrashHandler(&termination_handler, options);
+
+        pid_t innerPid = fork();
+        if (innerPid == -1) {
+            perror("inner fork");
+            _exit(99);
+        }
+
+        if (innerPid == 0) {
+            cause_sigsegv();
+            _exit(99);
+        }
+
+        int innerStatus;
+        waitpid(innerPid, &innerStatus, 0);
+
+        _exit(42);
+    }
+}
+
 TEST_CASE( "removed crash handler (sigsegv)" ) {
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
@@ -1186,6 +1321,64 @@ TEST_CASE( "notify (sighup)" ) {
         });
 
         raise(SIGHUP);
+        app.exec();
+        _exit(42);
+    }
+}
+
+TEST_CASE( "notify (sighup) in fork" ) {
+    int follow = GENERATE(0, 1, 2);
+    CAPTURE(follow);
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        HAS_EXITED_WITH(42);
+        if (follow == 0) {
+            CHECK(shared->sig_count == 1);
+        } else {
+            CHECK(shared->sig_count == 0);
+        }
+    } else {
+        int argc = 1;
+        char fake_name[] = "test-inner";
+        char *argv[] = { fake_name, nullptr };
+        QCoreApplication app(argc, argv);
+
+        PosixSignalManager::create();
+        PosixSignalOptions options;
+        if (follow == 0) {
+            options = PosixSignalOptions().followForks();
+        } else if (follow == 1) {
+            options = PosixSignalOptions().dontFollowForks();
+        }
+        PosixSignalNotifier n(SIGHUP, options);
+        QObject::connect(&n, &PosixSignalNotifier::activated, [&] (int signo, QSharedPointer<const siginfo_t> info) {
+            ++shared->sig_count;
+            shared->type = shared_page::notify;
+            memcpy(&shared->info, info.data(), sizeof(*info.data()));
+            shared->caught_signal.store(info->si_signo);
+            app.exit();
+        });
+
+        pid_t innerPid = fork();
+        if (innerPid == -1) {
+            perror("inner fork");
+            _exit(99);
+        }
+
+        if (innerPid == 0) {
+            raise(SIGHUP);
+            _exit(99);
+        }
+
+        int innerStatus;
+        waitpid(innerPid, &innerStatus, 0);
+
+        QTimer::singleShot(100, [] {
+            QCoreApplication::instance()->quit();
+        });
         app.exec();
         _exit(42);
     }

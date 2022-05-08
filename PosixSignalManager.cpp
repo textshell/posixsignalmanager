@@ -63,6 +63,7 @@ namespace {
         int id; // mainline (locked) access only
         int signo; // mainline (locked) access only
         NodeType type; // mainline (locked) access only
+        pid_t pidFilter; // only written to in init, readonly after that
     };
 
     struct SyncHandlerNode : public Node {
@@ -201,6 +202,9 @@ namespace {
         }
         int savedErrno = errno;
 
+        // At least on linux this assumes a modern libc that does not cache getpid().
+        pid_t currentPid = getpid();
+
         bool isUser = info->si_code == SI_USER || info->si_code == SI_QUEUE
 #ifdef SI_FROMUSER
                 || SI_FROMUSER(info)
@@ -239,9 +243,11 @@ namespace {
         NotifyFdNode* notifyFd = signalState->notifyFds.load(std::memory_order_seq_cst);
         if (syncHandler) {
             while (syncHandler) {
-                syncHandler->handler(cb, info, context);
-                if (cb.isStopChainSet()) {
-                    break;
+                if (syncHandler->pidFilter == 0 || syncHandler->pidFilter == currentPid) {
+                    syncHandler->handler(cb, info, context);
+                    if (cb.isStopChainSet()) {
+                        break;
+                    }
                 }
                 syncHandler = syncHandler->next.load(std::memory_order_seq_cst);
             }
@@ -249,12 +255,14 @@ namespace {
 
         if (!cb.isStopChainSet()) {
             while (notifyFd) {
-                // We depend on this write to be atomic. Posix requires writes smaller than PIPE_BUF to be
-                // atomic and the size requirement is checked above in a static_assert.
-                // If the pipe is full the signal is silently dropped.
-                write(notifyFd->write_fd, info, sizeof(*info));
-                // error of write explicitly not handled.
-                cb.clearReraise();
+                if (notifyFd->pidFilter == 0 || notifyFd->pidFilter == currentPid) {
+                    // We depend on this write to be atomic. Posix requires writes smaller than PIPE_BUF to be
+                    // atomic and the size requirement is checked above in a static_assert.
+                    // If the pipe is full the signal is silently dropped.
+                    write(notifyFd->write_fd, info, sizeof(*info));
+                    // error of write explicitly not handled.
+                    cb.clearReraise();
+                }
                 notifyFd = notifyFd->next.load(std::memory_order_seq_cst);
             }
         }
@@ -263,13 +271,17 @@ namespace {
             if (isTermination) {
                 SyncTerminationHandlerNode* thn = syncTerminationHandlers.load(std::memory_order_seq_cst);
                 while (thn) {
-                    thn->handler(info, context);
+                    if (thn->pidFilter == 0 || thn->pidFilter == currentPid) {
+                        thn->handler(info, context);
+                    }
                     thn = thn->next.load(std::memory_order_seq_cst);
                 }
             } else if (isCrash) {
                 SyncTerminationHandlerNode* thn = syncCrashHandlers.load(std::memory_order_seq_cst);
                 while (thn) {
-                    thn->handler(info, context);
+                    if (thn->pidFilter == 0 || thn->pidFilter == currentPid) {
+                        thn->handler(info, context);
+                    }
                     thn = thn->next.load(std::memory_order_seq_cst);
                 }
             }
@@ -400,9 +412,14 @@ public:
 };
 
 PosixSignalNotifier::PosixSignalNotifier(int signo, QObject *parent)
+    : PosixSignalNotifier(signo, PosixSignalOptions(), parent)
+{
+}
+
+PosixSignalNotifier::PosixSignalNotifier(int signo, const PosixSignalOptions &options, QObject *parent)
     : QObject(parent), impl(new PosixSignalNotifierPrivate(signo))
 {
-    impl->registrationId = PosixSignalManager::instance()->addSignalNotifier(signo, this);
+    impl->registrationId = PosixSignalManager::instance()->addSignalNotifier(signo, options, this);
 }
 
 PosixSignalNotifier::~PosixSignalNotifier() {
@@ -507,7 +524,7 @@ namespace {
     }
 }
 
-int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTerminationHandler handler) {
+int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTerminationHandler handler, const PosixSignalOptions &options) {
     QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
 
@@ -517,6 +534,7 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
     newNode->signo = 0;
     newNode->type = NodeType::SyncTerminationHandler;
     newNode->id = d->generateId();
+    newNode->pidFilter = (options._forkFilter == PosixSignalOptions::ForkNoFollow) ? getpid() : 0;
     d->idMap[newNode->id] = newNode;
     addToRoot(newNode, syncTerminationHandlers);
 
@@ -553,7 +571,7 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
     return newNode->id;
 }
 
-int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationHandler handler) {
+int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationHandler handler, const PosixSignalOptions &options) {
     QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
 
@@ -563,6 +581,7 @@ int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationH
     newNode->signo = 0;
     newNode->type = NodeType::SyncCrashHandler;
     newNode->id = d->generateId();
+    newNode->pidFilter = (options._forkFilter == PosixSignalOptions::ForkNoFollow) ? getpid() : 0;
     d->idMap[newNode->id] = newNode;
     addToRoot(newNode, syncCrashHandlers);
 
@@ -580,7 +599,7 @@ int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationH
     return newNode->id;
 }
 
-int PosixSignalManager::addSyncSignalHandler(int signo, PosixSignalManager::SyncHandler handler) {
+int PosixSignalManager::addSyncSignalHandler(int signo, PosixSignalManager::SyncHandler handler, const PosixSignalOptions &options) {
     QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
     if (signo >= NUM_SIGNALS || signo < 1) {
@@ -594,6 +613,7 @@ int PosixSignalManager::addSyncSignalHandler(int signo, PosixSignalManager::Sync
     newNode->type = NodeType::SyncHandler;
     newNode->signo = signo;
     newNode->id = d->generateId();
+    newNode->pidFilter = (options._forkFilter == PosixSignalOptions::ForkNoFollow) ? getpid() : 0;
     d->idMap[newNode->id] = newNode;
     addToRoot(newNode, signalStates[signo].syncHandlers);
 
@@ -673,7 +693,7 @@ int PosixSignalManager::classifySignal(int signo) {
     return ((isTermination || isCrash) ? 1 : 0) | (isCrash ? 2 : 0);
 }
 
-int PosixSignalManager::addSignalNotifier(int signo, PosixSignalNotifier *notifier) {
+int PosixSignalManager::addSignalNotifier(int signo, const PosixSignalOptions &options, PosixSignalNotifier *notifier) {
     QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
 
@@ -721,6 +741,7 @@ int PosixSignalManager::addSignalNotifier(int signo, PosixSignalNotifier *notifi
     newNode->type = NodeType::NotifyFd;
     newNode->signo = signo;
     newNode->id = d->generateId();
+    newNode->pidFilter = (options._forkFilter == PosixSignalOptions::ForkFollow) ? 0 : getpid();
     d->idMap[newNode->id] = newNode;
     addToRoot(newNode, signalStates[signo].notifyFds);
 
@@ -730,4 +751,16 @@ int PosixSignalManager::addSignalNotifier(int signo, PosixSignalNotifier *notifi
     QObject::connect(qsn, &QSocketNotifier::activated, notifier, &PosixSignalNotifier::_readyRead);
 
     return newNode->id;
+}
+
+PosixSignalOptions PosixSignalOptions::dontFollowForks() {
+    PosixSignalOptions ret = *this;
+    ret._forkFilter = ForkNoFollow;
+    return ret;
+}
+
+PosixSignalOptions PosixSignalOptions::followForks() {
+    PosixSignalOptions ret = *this;
+    ret._forkFilter = ForkFollow;
+    return ret;
 }
