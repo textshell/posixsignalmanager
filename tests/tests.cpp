@@ -1326,6 +1326,78 @@ TEST_CASE( "notify (sighup)" ) {
     }
 }
 
+TEST_CASE( "removed notify (sighup)" ) {
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        WAS_SIGNALED_WITH(SIGHUP);
+        CHECK(shared->sig_count == 0);
+    } else {
+        int argc = 1;
+        char fake_name[] = "test-inner";
+        char *argv[] = { fake_name, nullptr };
+        QCoreApplication app(argc, argv);
+
+        PosixSignalManager::create();
+        PosixSignalNotifier *notifier = new PosixSignalNotifier(SIGHUP);
+        QObject::connect(notifier, &PosixSignalNotifier::activated, [&] (int signo, QSharedPointer<const siginfo_t> info) {
+            ++shared->sig_count;
+            shared->type = shared_page::notify;
+            memcpy(&shared->info, info.data(), sizeof(*info.data()));
+            shared->caught_signal.store(info->si_signo);
+            app.exit();
+        });
+
+        delete notifier;
+
+        raise(SIGHUP);
+
+        QTimer::singleShot(0, [] {
+            QCoreApplication::instance()->quit();
+        });
+        app.exec();
+        _exit(42);
+    }
+}
+
+TEST_CASE( "removed notify (sigchld)" ) {
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        HAS_EXITED_WITH(42);
+        CHECK(shared->sig_count == 0);
+    } else {
+        int argc = 1;
+        char fake_name[] = "test-inner";
+        char *argv[] = { fake_name, nullptr };
+        QCoreApplication app(argc, argv);
+
+        PosixSignalManager::create();
+        PosixSignalNotifier *notifier = new PosixSignalNotifier(SIGCHLD);
+        QObject::connect(notifier, &PosixSignalNotifier::activated, [&] (int signo, QSharedPointer<const siginfo_t> info) {
+            ++shared->sig_count;
+            shared->type = shared_page::notify;
+            memcpy(&shared->info, info.data(), sizeof(*info.data()));
+            shared->caught_signal.store(info->si_signo);
+            app.exit();
+        });
+
+        delete notifier;
+
+        raise(SIGCHLD);
+
+        QTimer::singleShot(0, [] {
+            QCoreApplication::instance()->quit();
+        });
+        app.exec();
+        _exit(42);
+    }
+}
+
 TEST_CASE( "notify (sighup) in fork" ) {
     int follow = GENERATE(0, 1, 2);
     CAPTURE(follow);
