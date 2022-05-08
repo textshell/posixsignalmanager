@@ -202,6 +202,9 @@ namespace {
         int savedErrno = errno;
 
         bool isUser = info->si_code == SI_USER || info->si_code == SI_QUEUE
+#ifdef SI_FROMUSER
+                || SI_FROMUSER(info)
+#endif
 #ifdef SI_TKILL
                 || info->si_code == SI_TKILL
 #endif
