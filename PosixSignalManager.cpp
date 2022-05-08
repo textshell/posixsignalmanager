@@ -431,8 +431,31 @@ PosixSignalNotifier::~PosixSignalNotifier() {
 
 void PosixSignalNotifier::_readyRead(int socket) {
     QSharedPointer<siginfo_t> info = QSharedPointer<siginfo_t>::create();
-    int len = read(socket, info.data(), sizeof(siginfo_t));
-    if (len == sizeof(siginfo_t)) {
+    // We always write a full siginfo_t and nothing else should be reading from this fd. So we should always
+    // be able to get a full siginfo_t out.
+    int toRead = sizeof(siginfo_t);
+    int filled = 0;
+    do {
+        int len = read(socket, ((char*)info.data()) + filled, toRead);
+        if (len == 0) {
+            qDebug(LIBNAME "Got end of stream while reading from self pipe");
+            break;
+        }
+        if (len < 0) {
+            if (errno == EINTR) {
+                continue;
+            } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // spurious wakeup of some sort?
+                break;
+            } else {
+                qDebug(LIBNAME "Got error while reading from self pipe");
+                break;
+            }
+        }
+        filled += len;
+        toRead -= len;
+    } while (toRead > 0);
+    if (filled == sizeof(siginfo_t)) {
         activated(impl->signo, info);
     }
 }
