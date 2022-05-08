@@ -662,6 +662,28 @@ TEST_CASE( "reraise sigbus" ) {
 }
 #endif
 
+TEST_CASE( "reraise 'killed' sigbus" ) {
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        WAS_SIGNALED_WITH(SIGBUS);
+        CHECK(shared->sig_count == 1);
+        CHECK(shared->caught_signal.load() == SIGBUS);
+        CHECK(shared->type == shared_page::sync);
+#if defined(__APPLE__) || defined(__OpenBSD__)
+#else
+        CHECK(shared->info.si_code == SI_USER);
+#endif
+    } else {
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGBUS, &reraise_handler);
+        kill(getpid(), SIGBUS);
+        _exit(99);
+    }
+}
+
 #if defined(SIGIO)
 // ^^^ on some operating systems SIGIO is an alias to SIGPOLL
 #if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__) && !defined(__NetBSD__)
@@ -771,6 +793,32 @@ bad:
 #endif
 #endif
 
+TEST_CASE( "reraise 'killed' sigio" ) {
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        if (PosixSignalManager::classifySignal(SIGIO) > 0) {
+            WAS_SIGNALED_WITH(SIGIO);
+        } else {
+            HAS_EXITED_WITH(99);
+        }
+        CHECK(shared->sig_count == 1);
+        CHECK(shared->caught_signal.load() == SIGIO);
+        CHECK(shared->type == shared_page::sync);
+#if defined(__APPLE__)
+#else
+        CHECK(shared->info.si_code == SI_USER);
+#endif
+    } else {
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGIO, &reraise_handler);
+        kill(getpid(), SIGIO);
+        _exit(99);
+    }
+}
+
 #ifndef NO_SIGILL
 TEST_CASE( "baseline sigill" ) {
     pid_t pid = fork();
@@ -805,6 +853,28 @@ TEST_CASE( "reraise sigill" ) {
 }
 #endif
 
+TEST_CASE( "reraise 'killed' sigill" ) {
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        WAS_SIGNALED_WITH(SIGILL);
+        CHECK(shared->sig_count == 1);
+        CHECK(shared->caught_signal.load() == SIGILL);
+        CHECK(shared->type == shared_page::sync);
+#if defined(__APPLE__) || defined(__OpenBSD__)
+#else
+        CHECK(shared->info.si_code == SI_USER);
+#endif
+    } else {
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGILL, &reraise_handler);
+        kill(getpid(), SIGILL);
+        _exit(99);
+    }
+}
+
 TEST_CASE( "baseline sigfpe" ) {
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -831,6 +901,28 @@ TEST_CASE( "reraise sigfpe" ) {
         PosixSignalManager::create();
         PosixSignalManager::instance()->addSyncSignalHandler(SIGFPE, &reraise_handler);
         cause_sigfpe();
+        _exit(99);
+    }
+}
+
+TEST_CASE( "reraise 'killed' sigfpe" ) {
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        WAS_SIGNALED_WITH(SIGFPE);
+        CHECK(shared->sig_count == 1);
+        CHECK(shared->caught_signal.load() == SIGFPE);
+        CHECK(shared->type == shared_page::sync);
+#if defined(__APPLE__) || defined(__OpenBSD__)
+#else
+        CHECK(shared->info.si_code == SI_USER);
+#endif
+    } else {
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGFPE, &reraise_handler);
+        kill(getpid(), SIGFPE);
         _exit(99);
     }
 }
@@ -868,6 +960,28 @@ TEST_CASE( "reraise sigtrap" ) {
     }
 }
 #endif
+
+TEST_CASE( "reraise 'killed' sigtrap" ) {
+    SharedPageAlloc sharedPageAlloc;
+    pid_t pid = fork();
+    REQUIRE(pid != -1);
+    if (pid) {
+        WAIT_CHILD;
+        WAS_SIGNALED_WITH(SIGTRAP);
+        CHECK(shared->sig_count == 1);
+        CHECK(shared->caught_signal.load() == SIGTRAP);
+        CHECK(shared->type == shared_page::sync);
+#if defined(__APPLE__) || defined(__OpenBSD__)
+#else
+        CHECK(shared->info.si_code == SI_USER);
+#endif
+    } else {
+        PosixSignalManager::create();
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGTRAP, &reraise_handler);
+        kill(getpid(), SIGTRAP);
+        _exit(99);
+    }
+}
 
 #if defined(SIGIO) && defined(SIGRTMIN) && !defined(__FreeBSD__) && !defined(__OpenBSD__) \
     && !defined(__NetBSD__) && !defined(__sun)
