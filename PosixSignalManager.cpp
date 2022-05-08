@@ -245,10 +245,6 @@ namespace {
                 }
                 syncHandler = syncHandler->next.load(std::memory_order_seq_cst);
             }
-        } else {
-            if (!notifyFd) {
-                cb.reraise();
-            }
         }
 
         if (!cb.isStopChainSet()) {
@@ -258,6 +254,7 @@ namespace {
                 // If the pipe is full the signal is silently dropped.
                 write(notifyFd->write_fd, info, sizeof(*info));
                 // error of write explicitly not handled.
+                cb.clearReraise();
                 notifyFd = notifyFd->next.load(std::memory_order_seq_cst);
             }
         }

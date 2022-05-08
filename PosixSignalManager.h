@@ -15,7 +15,7 @@ public:
     bool isStopChainSet();
 
 private:
-    bool _reraise = false;
+    bool _reraise = true;
     bool _stopChain = false;
 };
 
