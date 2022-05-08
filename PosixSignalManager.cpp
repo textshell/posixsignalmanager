@@ -236,7 +236,7 @@ namespace {
         asyncSignalHandlerRunning.fetch_add(1, std::memory_order_seq_cst);
 
         SignalState* signalState = &signalStates[signo];
-        // mainline may not delete nodes until asyncRefCount reaches 0 again
+        // mainline may not delete nodes until asyncSignalHandlerRunning reaches 0 again
         PosixSignalFlags cb;
 
         SyncHandlerNode* syncHandler = signalState->syncHandlers.load(std::memory_order_seq_cst);
