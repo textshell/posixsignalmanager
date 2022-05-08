@@ -51,8 +51,8 @@ private:
 class PosixSignalManagerPrivate;
 class PosixSignalManager {
 public:
-    using SyncHandler = void(PosixSignalFlags &flags, const siginfo_t *info, void *context);
-    using SyncTerminationHandler = void(const siginfo_t *info, void *context);
+    using SyncHandler = void(void *data, PosixSignalFlags &flags, const siginfo_t *info, void *context);
+    using SyncTerminationHandler = void(void *data, const siginfo_t *info, void *context);
 
 public:
     static PosixSignalManager *create();
@@ -61,11 +61,11 @@ public:
 
 public:
     // SIGINT, SIGTERM etc
-    int addSyncTerminationHandler(SyncTerminationHandler handler, const PosixSignalOptions &options = PosixSignalOptions());
+    int addSyncTerminationHandler(SyncTerminationHandler handler, void *data, const PosixSignalOptions &options = PosixSignalOptions());
     // SIGSEGV etc
-    int addSyncCrashHandler(SyncTerminationHandler handler, const PosixSignalOptions &options = PosixSignalOptions());
+    int addSyncCrashHandler(SyncTerminationHandler handler, void *data, const PosixSignalOptions &options = PosixSignalOptions());
 
-    int addSyncSignalHandler(int signo, SyncHandler handler, const PosixSignalOptions &options = PosixSignalOptions());
+    int addSyncSignalHandler(int signo, SyncHandler handler, void *data, const PosixSignalOptions &options = PosixSignalOptions());
 
     void removeHandler(int id);
 

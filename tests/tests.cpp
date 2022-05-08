@@ -177,7 +177,8 @@ void checkdeps_sigbus() {
 #endif
 }
 
-void reraise_handler(PosixSignalFlags &flags, const siginfo_t *info, void *context) {
+void reraise_handler(void *data, PosixSignalFlags &flags, const siginfo_t *info, void *context) {
+    (void)data;
     ++shared->sig_count;
     shared->type = shared_page::sync;
     memcpy(&shared->info, info, sizeof(*info));
@@ -185,7 +186,8 @@ void reraise_handler(PosixSignalFlags &flags, const siginfo_t *info, void *conte
     flags.reraise();
 }
 
-void termination_handler(const siginfo_t *info, void *context) {
+void termination_handler(void *data, const siginfo_t *info, void *context) {
+    (void)data;
     ++shared->sig_count;
     shared->type = shared_page::termination;
     memcpy(&shared->info, info, sizeof(*info));
@@ -347,7 +349,7 @@ TEST_CASE( "reraise sigsegv" ) {
         CHECK(shared->info.si_code == SEGV_MAPERR);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler, nullptr);
         cause_sigsegv();
         _exit(99);
     }
@@ -378,7 +380,7 @@ TEST_CASE( "reraise sigsegv in fork" ) {
             options = PosixSignalOptions().followForks();
         }
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler, options);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler, nullptr, options);
 
         pid_t innerPid = fork();
         if (innerPid == -1) {
@@ -419,7 +421,7 @@ TEST_CASE( "reraise 'raised' sigsegv" ) {
 #endif
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler, nullptr);
         raise(SIGSEGV);
         _exit(99);
     }
@@ -441,7 +443,7 @@ TEST_CASE( "reraise 'killed' sigsegv" ) {
 #endif
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler, nullptr);
         kill(getpid(), SIGSEGV);
         _exit(99);
     }
@@ -463,7 +465,7 @@ TEST_CASE( "reraise 'queued' sigsegv" ) {
         CHECK(shared->info.si_value.sival_int == 42);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler, nullptr);
         sigval sv;
         sv.sival_int = 42;
         sigqueue(getpid(), SIGSEGV, sv);
@@ -496,7 +498,7 @@ TEST_CASE( "reraise 'io' sigsegv" ) {
         }
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler, nullptr);
         int sv[2];
         int flags;
         if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
@@ -540,7 +542,7 @@ TEST_CASE( "reraise 'timer' sigsegv" ) {
         CHECK(shared->info.si_code == SI_TIMER);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler, nullptr);
         timer_t timerid;
         sigevent sev;
         sev.sigev_notify = SIGEV_SIGNAL;
@@ -597,7 +599,7 @@ TEST_CASE( "reraise 'mq' sigsegv" ) {
         CHECK(shared->info.si_value.sival_int == 42);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler, nullptr);
         const char *name = "/PosixSignalManager-test";
         mq_unlink(name);
         mqd_t mqdes = mq_open(name, O_RDWR | O_CREAT, 0600, nullptr);
@@ -642,7 +644,7 @@ TEST_CASE( "reraise 'aio' sigsegv" ) {
 #endif
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGSEGV, &reraise_handler, nullptr);
         int fd = open("PosixSignalManager-aiotest", O_CREAT | O_RDWR, 0600);
         if (fd < 0) {
             perror("open");
@@ -701,7 +703,7 @@ TEST_CASE( "reraise sigbus" ) {
         CHECK(shared->type == shared_page::sync);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGBUS, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGBUS, &reraise_handler, nullptr);
         cause_sigbus();
         _exit(99);
     }
@@ -724,7 +726,7 @@ TEST_CASE( "reraise 'killed' sigbus" ) {
 #endif
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGBUS, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGBUS, &reraise_handler, nullptr);
         kill(getpid(), SIGBUS);
         _exit(99);
     }
@@ -748,7 +750,7 @@ TEST_CASE( "reraise sigio" ) {
         CHECK(shared->info.si_code == POLL_IN);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGIO, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGIO, &reraise_handler, nullptr);
         int sv[2];
         int flags;
         if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
@@ -809,7 +811,7 @@ TEST_CASE( "check sigio" ) {
 #endif
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGIO, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGIO, &reraise_handler, nullptr);
         int sv[2];
         int flags;
         if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
@@ -859,7 +861,7 @@ TEST_CASE( "reraise 'killed' sigio" ) {
 #endif
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGIO, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGIO, &reraise_handler, nullptr);
         kill(getpid(), SIGIO);
         _exit(99);
     }
@@ -892,7 +894,7 @@ TEST_CASE( "reraise sigill" ) {
         CHECK(shared->type == shared_page::sync);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGILL, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGILL, &reraise_handler, nullptr);
         cause_sigill();
         _exit(99);
     }
@@ -915,7 +917,7 @@ TEST_CASE( "reraise 'killed' sigill" ) {
 #endif
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGILL, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGILL, &reraise_handler, nullptr);
         kill(getpid(), SIGILL);
         _exit(99);
     }
@@ -945,7 +947,7 @@ TEST_CASE( "reraise sigfpe" ) {
         CHECK(shared->type == shared_page::sync);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGFPE, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGFPE, &reraise_handler, nullptr);
         cause_sigfpe();
         _exit(99);
     }
@@ -967,7 +969,7 @@ TEST_CASE( "reraise 'killed' sigfpe" ) {
 #endif
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGFPE, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGFPE, &reraise_handler, nullptr);
         kill(getpid(), SIGFPE);
         _exit(99);
     }
@@ -1000,7 +1002,7 @@ TEST_CASE( "reraise sigtrap" ) {
         CHECK(shared->type == shared_page::sync);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGTRAP, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGTRAP, &reraise_handler, nullptr);
         cause_sigtrap();
         _exit(99);
     }
@@ -1023,7 +1025,7 @@ TEST_CASE( "reraise 'killed' sigtrap" ) {
 #endif
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGTRAP, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGTRAP, &reraise_handler, nullptr);
         kill(getpid(), SIGTRAP);
         _exit(99);
     }
@@ -1045,7 +1047,7 @@ TEST_CASE( "reraise 'io' sigrt" ) {
         CHECK(shared->info.si_code == POLL_IN);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGRTMIN, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGRTMIN, &reraise_handler, nullptr);
         int sv[2];
         int flags;
         if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv)) {
@@ -1092,7 +1094,7 @@ TEST_CASE( "term handler (sighup)" ) {
 #endif
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler);
+        PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler, nullptr);
         raise(SIGHUP);
         _exit(99);
     }
@@ -1122,7 +1124,7 @@ TEST_CASE( "term handler (sighup) in fork" ) {
             options = PosixSignalOptions().followForks();
         }
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler, options);
+        PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler, nullptr, options);
 
         pid_t innerPid = fork();
         if (innerPid == -1) {
@@ -1161,7 +1163,7 @@ TEST_CASE( "term handler (sigrt)" ) {
 #endif
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler);
+        PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler, nullptr);
         raise(SIGRTMIN+1);
         _exit(99);
     }
@@ -1180,7 +1182,7 @@ TEST_CASE( "ignored term handler (sighup)" ) {
     } else {
         signal(SIGHUP, SIG_IGN);
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler);
+        PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler, nullptr);
         raise(SIGHUP);
         _exit(99);
     }
@@ -1198,7 +1200,7 @@ TEST_CASE( "removed term handler (sighup)" ) {
     } else {
         signal(SIGHUP, SIG_IGN);
         PosixSignalManager::create();
-        int id = PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler);
+        int id = PosixSignalManager::instance()->addSyncTerminationHandler(&termination_handler, nullptr);
         PosixSignalManager::instance()->removeHandler(id);
         raise(SIGHUP);
         _exit(99);
@@ -1218,7 +1220,7 @@ TEST_CASE( "crash handler (sigsegv)" ) {
         CHECK(shared->info.si_code == SEGV_MAPERR);
     } else {
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncCrashHandler(&termination_handler);
+        PosixSignalManager::instance()->addSyncCrashHandler(&termination_handler, nullptr);
         cause_sigsegv();
         _exit(99);
     }
@@ -1249,7 +1251,7 @@ TEST_CASE( "crash handler (sigsegv) in fork" ) {
             options = PosixSignalOptions().followForks();
         }
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncCrashHandler(&termination_handler, options);
+        PosixSignalManager::instance()->addSyncCrashHandler(&termination_handler, nullptr, options);
 
         pid_t innerPid = fork();
         if (innerPid == -1) {
@@ -1281,7 +1283,7 @@ TEST_CASE( "removed crash handler (sigsegv)" ) {
     } else {
         signal(SIGHUP, SIG_IGN);
         PosixSignalManager::create();
-        int id = PosixSignalManager::instance()->addSyncCrashHandler(&termination_handler);
+        int id = PosixSignalManager::instance()->addSyncCrashHandler(&termination_handler, nullptr);
         PosixSignalManager::instance()->removeHandler(id);
         cause_sigsegv();
         _exit(99);
@@ -1484,7 +1486,7 @@ TEST_CASE( "reraise TSTP/TTIN/TTOU" ) {
         // Make sure that this process is not in a orphaned process group, because that would disable these signal's action.
         setpgid(0, 0);
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(signo, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(signo, &reraise_handler, nullptr);
         raise(signo);
         int timelimit = 100;
         while (!shared->misc && timelimit-- > 0) {
@@ -1528,7 +1530,7 @@ TEST_CASE( "brute force 'killed' reraise" ) {
             _exit(11);
         }
         PosixSignalManager::create();
-        PosixSignalManager::instance()->addSyncSignalHandler(SIGTRAP, &reraise_handler);
+        PosixSignalManager::instance()->addSyncSignalHandler(SIGTRAP, &reraise_handler, nullptr);
 
         kill(getpid(), signo);
         _exit(99);

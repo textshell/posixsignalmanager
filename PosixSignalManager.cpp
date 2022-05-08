@@ -68,11 +68,13 @@ namespace {
 
     struct SyncHandlerNode : public Node {
         PosixSignalManager::SyncHandler *handler = nullptr;
+        void *data = nullptr; // only written to in init, readonly after that
         std::atomic<SyncHandlerNode*> next;
     };
 
     struct SyncTerminationHandlerNode : public Node {
         PosixSignalManager::SyncTerminationHandler *handler = nullptr;
+        void *data = nullptr; // only written to in init, readonly after that
         std::atomic<SyncTerminationHandlerNode*> next;
     };
 
@@ -245,7 +247,7 @@ namespace {
         if (syncHandler) {
             while (syncHandler) {
                 if (syncHandler->pidFilter == 0 || syncHandler->pidFilter == currentPid) {
-                    syncHandler->handler(cb, info, context);
+                    syncHandler->handler(syncHandler->data, cb, info, context);
                     if (cb.isStopChainSet()) {
                         break;
                     }
@@ -273,7 +275,7 @@ namespace {
                 SyncTerminationHandlerNode* thn = syncTerminationHandlers.load(std::memory_order_seq_cst);
                 while (thn) {
                     if (thn->pidFilter == 0 || thn->pidFilter == currentPid) {
-                        thn->handler(info, context);
+                        thn->handler(thn->data, info, context);
                     }
                     thn = thn->next.load(std::memory_order_seq_cst);
                 }
@@ -281,7 +283,7 @@ namespace {
                 SyncTerminationHandlerNode* thn = syncCrashHandlers.load(std::memory_order_seq_cst);
                 while (thn) {
                     if (thn->pidFilter == 0 || thn->pidFilter == currentPid) {
-                        thn->handler(info, context);
+                        thn->handler(thn->data, info, context);
                     }
                     thn = thn->next.load(std::memory_order_seq_cst);
                 }
@@ -523,13 +525,14 @@ namespace {
     }
 }
 
-int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTerminationHandler handler, const PosixSignalOptions &options) {
+int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTerminationHandler handler, void *data, const PosixSignalOptions &options) {
     QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
 
     SyncTerminationHandlerNode* newNode = new SyncTerminationHandlerNode();
     // lifetime is complicated. FIXME document more?
     newNode->handler = handler;
+    newNode->data = data;
     newNode->signo = 0;
     newNode->type = NodeType::SyncTerminationHandler;
     newNode->id = d->generateId();
@@ -570,13 +573,14 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
     return newNode->id;
 }
 
-int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationHandler handler, const PosixSignalOptions &options) {
+int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationHandler handler, void *data, const PosixSignalOptions &options) {
     QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
 
     SyncTerminationHandlerNode* newNode = new SyncTerminationHandlerNode();
     // lifetime is complicated. FIXME document more?
     newNode->handler = handler;
+    newNode->data = data;
     newNode->signo = 0;
     newNode->type = NodeType::SyncCrashHandler;
     newNode->id = d->generateId();
@@ -598,7 +602,7 @@ int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationH
     return newNode->id;
 }
 
-int PosixSignalManager::addSyncSignalHandler(int signo, PosixSignalManager::SyncHandler handler, const PosixSignalOptions &options) {
+int PosixSignalManager::addSyncSignalHandler(int signo, PosixSignalManager::SyncHandler handler, void *data, const PosixSignalOptions &options) {
     QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
     PosixSignalManagerPrivate *const d = impl.data();
     if (signo >= NUM_SIGNALS || signo < 1) {
@@ -609,6 +613,7 @@ int PosixSignalManager::addSyncSignalHandler(int signo, PosixSignalManager::Sync
     SyncHandlerNode* newNode = new SyncHandlerNode();
     // lifetime is complicated. FIXME document more?
     newNode->handler = handler;
+    newNode->data = data;
     newNode->type = NodeType::SyncHandler;
     newNode->signo = signo;
     newNode->id = d->generateId();
