@@ -699,6 +699,16 @@ int PosixSignalManager::addSignalNotifier(int signo, const PosixSignalOptions &o
         return -1;
     }
 
+    bool isTermination = false;
+    bool isCrash = false;
+    bool specialEffect = false;
+    PosixSignalManager_classify_signo(signo, &isTermination, &isCrash, &specialEffect);
+
+    if (isCrash) {
+        // error
+        return -1;
+    }
+
     int pipes[2];
     int r;
 #ifndef NO_PIPE2
