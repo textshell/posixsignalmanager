@@ -5,7 +5,11 @@
 
 #include <QObject>
 
+class PosixSignalFlagsPrivate;
 class PosixSignalFlags {
+    PosixSignalFlags(const PosixSignalFlags&) = delete;
+    PosixSignalFlags &operator=(const PosixSignalFlags&) = delete;
+
 public:
     void reraise();
     void clearReraise();
@@ -14,9 +18,12 @@ public:
     void stopChain();
     bool isStopChainSet();
 
+public: // internal interface
+    PosixSignalFlags(PosixSignalFlagsPrivate *impl);
+    ~PosixSignalFlags();
+
 private:
-    bool _reraise = true;
-    bool _stopChain = false;
+    PosixSignalFlagsPrivate* _impl;
 };
 
 class PosixSignalOptions {

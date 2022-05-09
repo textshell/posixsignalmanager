@@ -47,6 +47,12 @@ static_assert (sizeof(siginfo_t) < PIPE_BUF, "siginfo_t is bigger than limit for
 
 #define LIBNAME "PosixSignalManager: "
 
+class PosixSignalFlagsPrivate {
+    friend class PosixSignalFlags;
+    bool reraise = true;
+    bool stopChain = false;
+};
+
 namespace {
     PosixSignalManager *instance = nullptr;
 
@@ -246,7 +252,8 @@ namespace {
 
         SignalState* signalState = &signalStates[signo];
         // mainline may not delete nodes until asyncSignalHandlerRunning reaches 0 again
-        PosixSignalFlags cb;
+        PosixSignalFlagsPrivate cbPriv;
+        PosixSignalFlags cb(&cbPriv);
 
         SyncHandlerNode* syncHandler = signalState->syncHandlers.load(std::memory_order_seq_cst);
         NotifyFdNode* notifyFd = signalState->notifyFds.load(std::memory_order_seq_cst);
@@ -390,24 +397,32 @@ namespace {
     }
 }
 
+PosixSignalFlags::PosixSignalFlags(PosixSignalFlagsPrivate *impl)
+    : _impl(impl)
+{
+}
+
+PosixSignalFlags::~PosixSignalFlags() {
+}
+
 void PosixSignalFlags::reraise() {
-    _reraise = true;
+    _impl->reraise = true;
 }
 
 void PosixSignalFlags::clearReraise() {
-    _reraise = false;
+    _impl->reraise = false;
 }
 
 bool PosixSignalFlags::isReraiseSet() {
-    return _reraise;
+    return _impl->reraise;
 }
 
 void PosixSignalFlags::stopChain() {
-    _stopChain = true;
+    _impl->stopChain = true;
 }
 
 bool PosixSignalFlags::isStopChainSet() {
-    return _stopChain;
+    return _impl->stopChain;
 }
 
 class PosixSignalNotifierPrivate {
