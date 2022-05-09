@@ -330,28 +330,6 @@ namespace {
                 if (sigaction(signo, &newAction, &prevAction) != 0) {
                     PosixSignalManager_sigdie(LIBNAME "Error in signal handler. Can not reset handler to default in crash reraise: ", errno);
                 }
-
-#ifdef __linux__
-                if (0) {
-                    // Workaround for linux io event masquerading as SIGSEGV etc
-                    timer_t timerid;
-                    sigevent sev;
-                    sev.sigev_notify = SIGEV_SIGNAL;
-                    sev.sigev_signo = signo;
-                    sev.sigev_value.sival_ptr = 0;
-                    if (timer_create(CLOCK_REALTIME, &sev, &timerid) != -1) { // FIXME not async safe
-                        itimerspec its;
-                        its.it_value.tv_sec = 0;
-                        its.it_value.tv_nsec = 1000000;
-                        its.it_interval.tv_sec = its.it_value.tv_sec;
-                        its.it_interval.tv_nsec = its.it_value.tv_nsec;
-                        if (timer_settime(timerid, 0, &its, NULL) == -1) {
-                            perror("timer_settime");
-                            _exit(98);
-                        }
-                    }
-                }
-#endif
             } else if (isCrash || isTermination || specialEffect) {
                 // trigger default signal handling.
                 newAction.sa_handler = SIG_DFL;
