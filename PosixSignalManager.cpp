@@ -84,9 +84,13 @@ namespace {
         std::atomic<NotifyFdNode*> next;
     };
 
+    enum class InternalChainingMode : int { NeverChain, ChainAlways, ChainIfReraiseSet };
+    STATIC_ASSERT_ALWAYS_LOCKFREE(std::atomic<InternalChainingMode>);
+
     struct SignalState {
         std::atomic<SyncHandlerNode*> syncHandlers;
         std::atomic<NotifyFdNode*> notifyFds;
+        std::atomic<InternalChainingMode> chainingMode;
         bool handlerInstalled; // mainline (locked) access only
     };
 
@@ -96,13 +100,15 @@ namespace {
     std::atomic<int> asyncSignalHandlerRunning;
 
     bool signalHandlerInstalled[NUM_SIGNALS] = { false };
-    struct sigaction originalSignalActions[NUM_SIGNALS] = { }; // mainline (locked) access only
+    struct sigaction originalSignalActions[NUM_SIGNALS] = { }; // read by signal handler after reading SignalState::InternalChainingMode != Never
+                                                               // stored before writing SignalState::InternalChainingMode to != Never
 
     void PosixSignalManager_init() { // mainline (locked) access only
         asyncSignalHandlerRunning.store(0, std::memory_order_seq_cst);
         for (int i = 0; i < NUM_SIGNALS; i++) {
             signalStates[i].syncHandlers.store(nullptr, std::memory_order_seq_cst);
             signalStates[i].notifyFds.store(nullptr, std::memory_order_seq_cst);
+            signalStates[i].chainingMode.store(InternalChainingMode::NeverChain, std::memory_order_seq_cst);
             signalStates[i].handlerInstalled = false;
         }
         syncTerminationHandlers.store(nullptr, std::memory_order_seq_cst);
@@ -270,6 +276,19 @@ namespace {
             }
         }
 
+        bool shouldChain = false;
+        if (signalState->chainingMode != InternalChainingMode::NeverChain
+              && originalSignalActions[signo].sa_handler != SIG_IGN
+              && originalSignalActions[signo].sa_handler != SIG_DFL) {
+            if (signalState->chainingMode == InternalChainingMode::ChainAlways
+                  || (signalState->chainingMode == InternalChainingMode::ChainIfReraiseSet && cb.isReraiseSet())) {
+
+                shouldChain = true;
+                // when chaining don't reraise signal.
+                cb.clearReraise();
+            }
+        }
+
         if (cb.isReraiseSet()) {
             if (isTermination) {
                 SyncTerminationHandlerNode* thn = syncTerminationHandlers.load(std::memory_order_seq_cst);
@@ -368,6 +387,15 @@ namespace {
 
         asyncSignalHandlerRunning.fetch_sub(1, std::memory_order_seq_cst);
         errno = savedErrno;
+
+        // do this as the very last action
+        if (shouldChain) {
+            if (originalSignalActions[signo].sa_flags & SA_SIGINFO) {
+                originalSignalActions[signo].sa_sigaction(signo, info, context);
+            } else {
+                originalSignalActions[signo].sa_handler(signo);
+            }
+        }
     }
 
     void PosixSignalManager_install_handler(int signo) { // mainline (locked) access only
@@ -702,6 +730,31 @@ void PosixSignalManager::removeHandler(int id) {
         close(pipe_write);
         close(pipe_read);
     }
+}
+
+bool PosixSignalManager::setupSignalChaining(int signo, PosixSignalManager::ChainingMode mode) {
+    QMutexLocker locker(&PosixSignalManagerPrivate::mutex);
+
+    if (signo >= NUM_SIGNALS || signo < 1) {
+        // error
+        return false;
+    }
+
+    if (mode != ChainingMode::ChainAlways && mode != ChainingMode::ChainIfReraiseSet) {
+        return false;
+    }
+
+    installIfNeeded(signo);
+
+    if (mode == ChainingMode::ChainAlways) {
+        signalStates[signo].chainingMode.store(InternalChainingMode::ChainAlways, std::memory_order_seq_cst);
+    }
+
+    if (mode == ChainingMode::ChainIfReraiseSet) {
+        signalStates[signo].chainingMode.store(InternalChainingMode::ChainIfReraiseSet, std::memory_order_seq_cst);
+    }
+
+    return true;
 }
 
 void PosixSignalManager::barrier() {

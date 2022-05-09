@@ -53,6 +53,7 @@ class PosixSignalManager {
 public:
     using SyncHandler = void(void *data, PosixSignalFlags &flags, const siginfo_t *info, void *context);
     using SyncTerminationHandler = void(void *data, const siginfo_t *info, void *context);
+    enum class ChainingMode : int { ChainAlways, ChainIfReraiseSet };
 
 public:
     static PosixSignalManager *create();
@@ -71,6 +72,8 @@ public:
 
     int allocateSignal();
     bool deallocateSignal(int signo);
+
+    bool setupSignalChaining(int signo, ChainingMode mode);
 
     void barrier();
 
