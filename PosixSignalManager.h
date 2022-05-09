@@ -87,9 +87,6 @@ public:
 
     void removeHandler(int id);
 
-    int allocateSignal();
-    bool deallocateSignal(int signo);
-
     bool setupSignalChaining(int signo, ChainingMode mode);
 
     void barrier();
