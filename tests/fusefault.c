@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSL-1.0
+
 // This is a very simple fuse based file system to cause sigbus when memory mapping the always_eio file
 // and reading from the resulting memory.
 // compile with gcc -o fusefault fusefault.c $(pkg-config --cflags --libs fuse) -Wall -Wextra -Werror

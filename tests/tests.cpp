@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSL-1.0
+
 #if __has_include(<aio.h>)
 #include <aio.h>
 #endif

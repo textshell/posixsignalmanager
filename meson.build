@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BSL-1.0
+
 project('posixsignalmanager', ['cpp'], default_options : ['cpp_std=c++14'])
 
 macros = []
