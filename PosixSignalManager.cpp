@@ -425,6 +425,11 @@ bool PosixSignalFlags::isStopChainSet() {
     return _impl->stopChain;
 }
 
+class PosixSignalOptionsPrivate {
+public:
+    enum { ForkDefault, ForkFollow, ForkNoFollow } _forkFilter = ForkDefault;
+};
+
 class PosixSignalNotifierPrivate {
 public:
     PosixSignalNotifierPrivate(int signo) : signo(signo) {
@@ -580,7 +585,7 @@ int PosixSignalManager::addSyncTerminationHandler(PosixSignalManager::SyncTermin
     newNode->signo = 0;
     newNode->type = NodeType::SyncTerminationHandler;
     newNode->id = d->generateId();
-    newNode->pidFilter = (options._forkFilter == PosixSignalOptions::ForkNoFollow) ? getpid() : 0;
+    newNode->pidFilter = (options._impl->_forkFilter == PosixSignalOptionsPrivate::ForkNoFollow) ? getpid() : 0;
     d->idMap[newNode->id] = newNode;
     addToRoot(newNode, syncTerminationHandlers);
 
@@ -628,7 +633,7 @@ int PosixSignalManager::addSyncCrashHandler(PosixSignalManager::SyncTerminationH
     newNode->signo = 0;
     newNode->type = NodeType::SyncCrashHandler;
     newNode->id = d->generateId();
-    newNode->pidFilter = (options._forkFilter == PosixSignalOptions::ForkNoFollow) ? getpid() : 0;
+    newNode->pidFilter = (options._impl->_forkFilter == PosixSignalOptionsPrivate::ForkNoFollow) ? getpid() : 0;
     d->idMap[newNode->id] = newNode;
     addToRoot(newNode, syncCrashHandlers);
 
@@ -661,7 +666,7 @@ int PosixSignalManager::addSyncSignalHandler(int signo, PosixSignalManager::Sync
     newNode->type = NodeType::SyncHandler;
     newNode->signo = signo;
     newNode->id = d->generateId();
-    newNode->pidFilter = (options._forkFilter == PosixSignalOptions::ForkNoFollow) ? getpid() : 0;
+    newNode->pidFilter = (options._impl->_forkFilter == PosixSignalOptionsPrivate::ForkNoFollow) ? getpid() : 0;
     d->idMap[newNode->id] = newNode;
     addToRoot(newNode, signalStates[signo].syncHandlers);
 
@@ -822,7 +827,7 @@ int PosixSignalManager::addSignalNotifier(int signo, const PosixSignalOptions &o
     newNode->type = NodeType::NotifyFd;
     newNode->signo = signo;
     newNode->id = d->generateId();
-    newNode->pidFilter = (options._forkFilter == PosixSignalOptions::ForkFollow) ? 0 : getpid();
+    newNode->pidFilter = (options._impl->_forkFilter == PosixSignalOptionsPrivate::ForkFollow) ? 0 : getpid();
     d->idMap[newNode->id] = newNode;
     addToRoot(newNode, signalStates[signo].notifyFds);
 
@@ -834,14 +839,33 @@ int PosixSignalManager::addSignalNotifier(int signo, const PosixSignalOptions &o
     return newNode->id;
 }
 
+PosixSignalOptions::PosixSignalOptions()
+    : _impl(std::make_unique<PosixSignalOptionsPrivate>())
+{
+}
+
+PosixSignalOptions::PosixSignalOptions(const PosixSignalOptions &other)
+    : _impl(std::make_unique<PosixSignalOptionsPrivate>(*other._impl))
+{
+}
+
+PosixSignalOptions::~PosixSignalOptions() {
+}
+
+PosixSignalOptions &PosixSignalOptions::operator=(const PosixSignalOptions &other)
+{
+    *this->_impl = *other._impl;
+    return *this;
+}
+
 PosixSignalOptions PosixSignalOptions::dontFollowForks() {
     PosixSignalOptions ret = *this;
-    ret._forkFilter = ForkNoFollow;
+    ret._impl->_forkFilter = PosixSignalOptionsPrivate::ForkNoFollow;
     return ret;
 }
 
 PosixSignalOptions PosixSignalOptions::followForks() {
     PosixSignalOptions ret = *this;
-    ret._forkFilter = ForkFollow;
+    ret._impl->_forkFilter = PosixSignalOptionsPrivate::ForkFollow;
     return ret;
 }

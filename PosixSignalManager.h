@@ -3,6 +3,8 @@
 
 #include <signal.h>
 
+#include <memory>
+
 #include <QObject>
 
 class PosixSignalFlagsPrivate;
@@ -26,14 +28,22 @@ private:
     PosixSignalFlagsPrivate* _impl;
 };
 
+class PosixSignalOptionsPrivate;
 class PosixSignalOptions {
     friend class PosixSignalManager;
+public:
+    PosixSignalOptions();
+    PosixSignalOptions(const PosixSignalOptions &other);
+    ~PosixSignalOptions();
+
+    PosixSignalOptions &operator=(const PosixSignalOptions &other);
+
 public:
     PosixSignalOptions dontFollowForks();
     PosixSignalOptions followForks();
 
 private:
-    enum { ForkDefault, ForkFollow, ForkNoFollow } _forkFilter = ForkDefault;
+    std::unique_ptr<PosixSignalOptionsPrivate> _impl;
 };
 
 class PosixSignalNotifierPrivate;
