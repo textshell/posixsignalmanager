@@ -9,6 +9,8 @@
 
 #include <QObject>
 
+inline namespace PosixSignalManager_v0 {
+
 class PosixSignalFlagsPrivate;
 class PosixSignalFlags {
     PosixSignalFlags(const PosixSignalFlags&) = delete;
@@ -104,5 +106,7 @@ private:
 
     QScopedPointer<PosixSignalManagerPrivate> impl;
 };
+
+}
 
 #endif // POSIXSIGNALMANAGER_INCLUDED

@@ -47,6 +47,8 @@ static_assert (sizeof(siginfo_t) < PIPE_BUF, "siginfo_t is bigger than limit for
 
 #define LIBNAME "PosixSignalManager: "
 
+inline namespace PosixSignalManager_v0 {
+
 class PosixSignalFlagsPrivate {
     friend class PosixSignalFlags;
     bool reraise = true;
@@ -868,4 +870,6 @@ PosixSignalOptions PosixSignalOptions::followForks() {
     PosixSignalOptions ret = *this;
     ret._impl->_forkFilter = PosixSignalOptionsPrivate::ForkFollow;
     return ret;
+}
+
 }
