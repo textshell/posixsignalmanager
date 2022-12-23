@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: BSL-1.0
 
-project('posixsignalmanager', ['cpp'], default_options : ['cpp_std=c++14'])
+project('posixsignalmanager', ['cpp'],
+  default_options : ['cpp_std=c++14'],
+  version: '0.3.0')
 
 macros = []
 cxx = meson.get_compiler('cpp')
