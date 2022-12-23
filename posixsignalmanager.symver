@@ -1,0 +1,42 @@
+POSIXSIGNALMANAGER_0.3 {
+    global: extern "C++" {
+        "PosixSignalManager_v0::PosixSignalFlags::clearReraise()";
+        "PosixSignalManager_v0::PosixSignalFlags::isReraiseSet()";
+        "PosixSignalManager_v0::PosixSignalFlags::isStopChainSet()";
+        "PosixSignalManager_v0::PosixSignalFlags::reraise()";
+        "PosixSignalManager_v0::PosixSignalFlags::stopChain()";
+        "PosixSignalManager_v0::PosixSignalFlags::~PosixSignalFlags()";
+
+        "PosixSignalManager_v0::PosixSignalManager::addSyncCrashHandler(void (*)(void*, siginfo_t const*, void*), void*, PosixSignalManager_v0::PosixSignalOptions const&)";
+        "PosixSignalManager_v0::PosixSignalManager::addSyncSignalHandler(int, void (*)(void*, PosixSignalManager_v0::PosixSignalFlags&, siginfo_t const*, void*), void*, PosixSignalManager_v0::PosixSignalOptions const&)";
+        "PosixSignalManager_v0::PosixSignalManager::addSyncTerminationHandler(void (*)(void*, siginfo_t const*, void*), void*, PosixSignalManager_v0::PosixSignalOptions const&)";
+        "PosixSignalManager_v0::PosixSignalManager::barrier()";
+        "PosixSignalManager_v0::PosixSignalManager::classifySignal(int)";
+        "PosixSignalManager_v0::PosixSignalManager::create()";
+        "PosixSignalManager_v0::PosixSignalManager::instance()";
+        "PosixSignalManager_v0::PosixSignalManager::isCreated()";
+        "PosixSignalManager_v0::PosixSignalManager::removeHandler(int)";
+        "PosixSignalManager_v0::PosixSignalManager::setupSignalChaining(int, PosixSignalManager_v0::PosixSignalManager::ChainingMode)";
+
+        "PosixSignalManager_v0::PosixSignalNotifier::PosixSignalNotifier(int, PosixSignalManager_v0::PosixSignalOptions const&, QObject*)";
+        "PosixSignalManager_v0::PosixSignalNotifier::PosixSignalNotifier(int, QObject*)";
+        "PosixSignalManager_v0::PosixSignalNotifier::activated(int, QSharedPointer<siginfo_t const>)";
+        "PosixSignalManager_v0::PosixSignalNotifier::metaObject() const";
+        "PosixSignalManager_v0::PosixSignalNotifier::staticMetaObject";
+        "PosixSignalManager_v0::PosixSignalNotifier::~PosixSignalNotifier()";
+        "typeinfo for PosixSignalManager_v0::PosixSignalNotifier";
+        "typeinfo name for PosixSignalManager_v0::PosixSignalNotifier";
+        "vtable for PosixSignalManager_v0::PosixSignalNotifier";
+
+        "PosixSignalManager_v0::PosixSignalOptions::PosixSignalOptions()";
+        "PosixSignalManager_v0::PosixSignalOptions::PosixSignalOptions(PosixSignalManager_v0::PosixSignalOptions const&)";
+        "PosixSignalManager_v0::PosixSignalOptions::dontFollowForks()";
+        "PosixSignalManager_v0::PosixSignalOptions::followForks()";
+        "PosixSignalManager_v0::PosixSignalOptions::operator=(PosixSignalManager_v0::PosixSignalOptions const&)";
+        "PosixSignalManager_v0::PosixSignalOptions::~PosixSignalOptions()";
+   };
+
+   local: extern "C++" {
+        PosixSignalManager_v0::*
+   };
+};

@@ -25,9 +25,19 @@ endif
 qt5 = import('qt5')
 qt5_dep = dependency('qt5', modules: 'Core')
 
+main_vscript = 'posixsignalmanager.symver'
+if host_machine.system() == 'linux'
+  # for now, only do this on linux, expand supported platforms as needed
+  main_ld_vscript = '-Wl,--version-script,@0@/@1@'.format(meson.current_source_dir(), main_vscript)
+else
+  main_ld_vscript = []
+endif
+
 posixsignalmanager_lib = both_libraries('posixsignalmangager', 'PosixSignalManager.cpp',
                                         qt5.preprocess(moc_headers: 'PosixSignalManager.h'),
                                         dependencies : [qt5_dep, librt], cpp_args: macros,
+                                        link_args : main_ld_vscript,
+                                        link_depends : main_vscript,
                                         soversion: '0a',
                                         install: true)
 
