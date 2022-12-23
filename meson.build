@@ -28,6 +28,7 @@ qt5_dep = dependency('qt5', modules: 'Core')
 posixsignalmanager_lib = both_libraries('posixsignalmangager', 'PosixSignalManager.cpp',
                                         qt5.preprocess(moc_headers: 'PosixSignalManager.h'),
                                         dependencies : [qt5_dep, librt], cpp_args: macros,
+                                        soversion: '0a',
                                         install: true)
 
 posixsignalmanager_dep = declare_dependency(link_with: posixsignalmanager_lib,
