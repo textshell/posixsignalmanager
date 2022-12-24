@@ -33,12 +33,14 @@ else
   main_ld_vscript = []
 endif
 
+
 posixsignalmanager_lib = both_libraries('posixsignalmangager', 'PosixSignalManager.cpp',
                                         qt5.preprocess(moc_headers: 'PosixSignalManager.h'),
                                         dependencies : [qt5_dep, librt], cpp_args: macros,
                                         link_args : main_ld_vscript,
                                         link_depends : main_vscript,
                                         soversion: '0a',
+                                        darwin_versions: ['1', '1'],
                                         install: true)
 
 posixsignalmanager_dep = declare_dependency(link_with: posixsignalmanager_lib,
