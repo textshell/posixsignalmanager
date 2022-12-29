@@ -34,7 +34,7 @@ else
 endif
 
 
-posixsignalmanager_lib = both_libraries('posixsignalmangager', 'PosixSignalManager.cpp',
+posixsignalmanager_lib = both_libraries('posixsignalmanager', 'PosixSignalManager.cpp',
                                         qt5.preprocess(moc_headers: 'PosixSignalManager.h'),
                                         dependencies : [qt5_dep, librt], cpp_args: macros,
                                         link_args : main_ld_vscript,
