@@ -2,7 +2,7 @@
 
 project('posixsignalmanager', ['cpp'],
   default_options : ['cpp_std=c++14'],
-  version: '0.3.0')
+  version: '0.3')
 
 macros = []
 cxx = meson.get_compiler('cpp')
@@ -51,7 +51,6 @@ install_headers('PosixSignalManager.h')
 
 import('pkgconfig').generate(
   posixsignalmanager_lib,
-  version: '0.0',
   description: 'management of posix signals for environments using the qt event loop',
   filebase: 'PosixSignalManager',
   name: 'PosixSignalManager',
