@@ -184,12 +184,13 @@ namespace {
     }
 
     void PosixSignalManager_sigdie(const char *msg, int code) {
-        write(2, msg, strlen(msg));
+        // If any of the writes fail, we can't do much about it, so don't even bother checking the return.
+        (void)!write(2, msg, strlen(msg));
         if (code) {
             // open coded int to ascii code, because async signal safety requirements.
             unsigned int tmp;
             if (code < 0) {
-                write(2, "-", 1);
+                (void)!write(2, "-", 1);
                 tmp = -(unsigned int)code;
             } else {
                 tmp = (unsigned int)code;
@@ -200,13 +201,13 @@ namespace {
             }
             do {
                 char ch = '0' + (tmp / digitValue);
-                write(2, &ch, 1);
+                (void)!write(2, &ch, 1);
                 tmp /= 10;
                 digitValue /= 10;
             } while (digitValue > 0);
 
         }
-        write(2, "\r\n", 2);
+        (void)!write(2, "\r\n", 2);
         signal(SIGABRT, SIG_DFL);
         abort();
     }
@@ -277,7 +278,7 @@ namespace {
                     // We depend on this write to be atomic. Posix requires writes smaller than PIPE_BUF to be
                     // atomic and the size requirement is checked above in a static_assert.
                     // If the pipe is full the signal is silently dropped.
-                    write(notifyFd->write_fd, info, sizeof(*info));
+                    (void)!write(notifyFd->write_fd, info, sizeof(*info));
                     // error of write explicitly not handled.
                     cb.clearReraise();
                 }
