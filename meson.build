@@ -73,7 +73,23 @@ if not meson.is_subproject()
   if host_machine.system() == 'sunos'
     testdep_socket = cxx.find_library('socket')
   endif
+
+  test_cpp_args = []
+  feraiseexcept_test_code = '''
+#define _GNU_SOURCE
+#include <fenv.h>
+
+int main() {
+    feenableexcept(FE_DIVBYZERO);
+    feraiseexcept(FE_DIVBYZERO);
+}
+'''
+  if cxx.links(feraiseexcept_test_code,
+       name: 'feraiseexcept')
+    test_cpp_args += ['-DTEST_ENABLE_FERAISEEXCEPT']
+  endif
   test('tests', executable('tests', 'tests/tests.cpp', link_with: [testlib],
-       dependencies: [posixsignalmanager_dep, qt5_dep, librt, catch2_dep, testdep_socket]),
+       dependencies: [posixsignalmanager_dep, qt5_dep, librt, catch2_dep, testdep_socket],
+       cpp_args: test_cpp_args),
        verbose: true)
 endif

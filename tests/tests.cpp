@@ -19,6 +19,10 @@
 #include <sys/stropts.h>
 #endif
 
+#if defined(TEST_ENABLE_FERAISEEXCEPT)
+#include <fenv.h>
+#endif
+
 #define CATCH_CONFIG_EXTERNAL_INTERFACES
 #define CATCH_CONFIG_NO_POSIX_SIGNALS
 #ifndef BUNDLED_CATCH2
@@ -151,6 +155,11 @@ void cause_sigsegv() {
 int zero = 0;
 
 void cause_sigfpe() {
+#if defined(TEST_ENABLE_FERAISEEXCEPT)
+    feenableexcept(FE_DIVBYZERO);
+    feraiseexcept(FE_DIVBYZERO);
+#endif
+
     printf("%d\n", 3 / zero);
 }
 
