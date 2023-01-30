@@ -1030,6 +1030,10 @@ TEST_CASE( "reraise sigfpe" ) {
     if (!supported) {
         WARN("Skipping 'reraise sigfpe' test, because triggering SIGFPE failed");
         return;
+    } else {
+#if defined(__riscv)
+        FAIL("Archtecture skip-list contains architecture where SIGFPE could be triggered");
+#endif
     }
 
     SharedPageAlloc sharedPageAlloc;
