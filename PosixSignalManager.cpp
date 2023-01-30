@@ -138,7 +138,7 @@ namespace {
 #endif
             case SIGPIPE:
             case SIGPROF:
-#if defined(SIGPWR) && !defined(__NetBSD__) && !defined(__sun)
+#if defined(SIGPWR) && !defined(__NetBSD__) && !defined(__sun) && !defined(__sparc__)
             case SIGPWR:
 #endif
             case SIGQUIT:
