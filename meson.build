@@ -74,5 +74,6 @@ if not meson.is_subproject()
     testdep_socket = cxx.find_library('socket')
   endif
   test('tests', executable('tests', 'tests/tests.cpp', link_with: [testlib],
-       dependencies: [posixsignalmanager_dep, qt5_dep, librt, catch2_dep, testdep_socket]))
+       dependencies: [posixsignalmanager_dep, qt5_dep, librt, catch2_dep, testdep_socket]),
+       verbose: true)
 endif

@@ -259,6 +259,11 @@ struct SharedPageAlloc {
     INFO("info=" << std::hex << info);     \
     REQUIRE(r != -1)
 
+#define PREDICATE_SIGNALED_WITH(signo)  \
+    ((r == pid)                         \
+     && (WIFSIGNALED(info))             \
+     && (WTERMSIG(info) == signo))
+
 #define WAS_SIGNALED_WITH(signo)        \
     CHECK(r == pid);                    \
     CHECK(WIFSIGNALED(info));           \
@@ -284,6 +289,11 @@ struct SharedPageAlloc {
     errno = 0;                                                          \
     int r = waitid(P_ALL, 0, &info, WEXITED | WSTOPPED | WCONTINUED);   \
     REQUIRE(r == 0)
+
+#define PREDICATE_SIGNALED_WITH(signo)  \
+    ((info.si_pid == pid)               \
+     && (info.si_code == CLD_KILLED)    \
+     && (info.si_status == signo))
 
 #define WAS_SIGNALED_WITH(signo)        \
     CHECK(info.si_pid == pid);          \
@@ -979,6 +989,12 @@ TEST_CASE( "reraise 'killed' sigill" ) {
     }
 }
 
+// triggering SIGFPE portably is hard and some architectures like aarch64 even seem to allow implementation to
+// not implement it at all or even don't have a concept like it at all (risc v)
+// So require it only for known good architectures and only do opportunistic testing otherwise.
+
+#if defined(__amd64__) || defined(__i386__) || defined(__mips__)
+
 TEST_CASE( "baseline sigfpe" ) {
     resetSignalsCatch3();
     pid_t pid = fork();
@@ -992,8 +1008,30 @@ TEST_CASE( "baseline sigfpe" ) {
     }
 }
 
+#endif
+
 TEST_CASE( "reraise sigfpe" ) {
     resetSignalsCatch3();
+
+    // Check if triggering SIGFPE is supported on this platform
+    bool supported = false;
+    {
+        pid_t pid = fork();
+        REQUIRE(pid != -1);
+        if (pid) {
+            WAIT_CHILD;
+            supported = PREDICATE_SIGNALED_WITH(SIGFPE);
+        } else {
+            cause_sigfpe();
+            _exit(99);
+        }
+    }
+
+    if (!supported) {
+        WARN("Skipping 'reraise sigfpe' test, because triggering SIGFPE failed");
+        return;
+    }
+
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
