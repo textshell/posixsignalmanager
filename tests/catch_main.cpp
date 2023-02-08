@@ -3,7 +3,11 @@
 #define CATCH_CONFIG_RUNNER
 #define CATCH_CONFIG_NO_POSIX_SIGNALS
 #ifndef BUNDLED_CATCH2
+#ifdef CATCH3
+#include "catch2/catch_all.hpp"
+#else
 #include "catch2/catch.hpp"
+#endif
 #else
 #include "catch.hpp"
 #endif

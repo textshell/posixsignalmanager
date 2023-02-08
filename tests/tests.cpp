@@ -22,7 +22,11 @@
 #define CATCH_CONFIG_EXTERNAL_INTERFACES
 #define CATCH_CONFIG_NO_POSIX_SIGNALS
 #ifndef BUNDLED_CATCH2
+#ifdef CATCH3
+#include "catch2/catch_all.hpp"
+#else
 #include "catch2/catch.hpp"
+#endif
 #else
 #include "catch.hpp"
 #endif
@@ -34,12 +38,23 @@
 
 #include "PosixSignalManager.h"
 
-struct SaneStateListener : Catch::TestEventListenerBase {
-    SaneStateListener(Catch::ReporterConfig const& _config) : Catch::TestEventListenerBase(_config) {
+#ifdef CATCH3
+using ListenerBase = Catch::EventListenerBase;
+#else
+using ListenerBase = Catch::TestEventListenerBase;
+#endif
+
+struct SaneStateListener : ListenerBase {
+
+#if CATCH3
+    SaneStateListener(Catch::IConfig const* config) : ListenerBase(config) {
+#else
+    SaneStateListener(Catch::ReporterConfig const& _config) : ListenerBase(_config) {
+#endif
         mainPid = getpid();
     }
 
-    using TestEventListenerBase::TestEventListenerBase; // inherit constructor
+    using ListenerBase::ListenerBase; // inherit constructor
 
     virtual void testCaseStarting(Catch::TestCaseInfo const& testInfo) override {
         (void)testInfo;
@@ -56,12 +71,20 @@ struct SaneStateListener : Catch::TestEventListenerBase {
     virtual void testCaseEnded(Catch::TestCaseStats const& testCaseStats) override {
         if (getpid() != mainPid) {
             puts("FATAL: child process did escape into test runner. Test:");
+#if CATCH3
+            puts(testCaseStats.testInfo->name.c_str());
+#else
             puts(testCaseStats.testInfo.name.c_str());
+#endif
             abort();
         }
         if (PosixSignalManager::isCreated()) {
             puts("FATAL: PosixSignalManager was created in test runner process. Test:");
+#if CATCH3
+            puts(testCaseStats.testInfo->name.c_str());
+#else
             puts(testCaseStats.testInfo.name.c_str());
+#endif
             abort();
         }
     }
@@ -69,6 +92,16 @@ struct SaneStateListener : Catch::TestEventListenerBase {
     pid_t mainPid;
 };
 CATCH_REGISTER_LISTENER(SaneStateListener)
+
+void resetSignalsCatch3() {
+#if CATCH3
+   // There doesn't seem to be a way to disable signal catching that works with
+   // distro precompiled catch library. Workaround by resetting manually.
+   for (int signo = 0; signo < 128; signo++) {
+        signal(signo, SIG_DFL);
+    }
+#endif
+}
 
 #ifdef __linux__
 bool isLinux() {
@@ -289,6 +322,7 @@ struct SharedPageAlloc {
 #endif
 
 TEST_CASE( "signal classification" ) {
+    resetSignalsCatch3();
     int signo = GENERATE(range(1, NUM_SIGNALS));
     CAPTURE(signo);
     if (signo == SIGKILL || signo == SIGSTOP || signo == SIGTSTP || signo == SIGTTIN || signo == SIGTTOU) {
@@ -327,6 +361,7 @@ TEST_CASE( "signal classification" ) {
 }
 
 TEST_CASE( "baseline sigsegv" ) {
+    resetSignalsCatch3();
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -339,6 +374,7 @@ TEST_CASE( "baseline sigsegv" ) {
 }
 
 TEST_CASE( "reraise sigsegv" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -358,6 +394,7 @@ TEST_CASE( "reraise sigsegv" ) {
 }
 
 TEST_CASE( "reraise sigsegv in fork" ) {
+    resetSignalsCatch3();
     int follow = GENERATE(0, 1, 2);
     CAPTURE(follow);
     SharedPageAlloc sharedPageAlloc;
@@ -403,6 +440,7 @@ TEST_CASE( "reraise sigsegv in fork" ) {
 }
 
 TEST_CASE( "reraise 'raised' sigsegv" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -430,6 +468,7 @@ TEST_CASE( "reraise 'raised' sigsegv" ) {
 }
 
 TEST_CASE( "reraise 'killed' sigsegv" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -454,6 +493,7 @@ TEST_CASE( "reraise 'killed' sigsegv" ) {
 #if defined(SIGRTMIN)
 // ^^^ sigqueue depends on realtime signals
 TEST_CASE( "reraise 'queued' sigsegv" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -478,6 +518,7 @@ TEST_CASE( "reraise 'queued' sigsegv" ) {
 
 #ifdef __linux__
 TEST_CASE( "reraise 'io' sigsegv" ) {
+    resetSignalsCatch3();
     bool linux_pre_4_14 = false;
     if (isLinux() && utsRelease() < QVector<int>{4,14}) {
         WARN("\"reraise 'io' sigsegv\" test uses degraded handling on linux kernel < 4.14");
@@ -532,6 +573,7 @@ bad:
 #if defined(SIGRTMIN)
 // ^^^ timer_create depends on realtime signals
 TEST_CASE( "reraise 'timer' sigsegv" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -573,6 +615,7 @@ TEST_CASE( "reraise 'timer' sigsegv" ) {
 #if defined(__FreeBSD__)
 // FreeBSD doesn't implement mq_open (it only returns ENOSYS)
 TEST_CASE( "mqueue not implemented" ) {
+    resetSignalsCatch3();
     const char *name = "/PosixSignalManager-test";
     mq_unlink(name);
     errno = 0;
@@ -588,6 +631,7 @@ TEST_CASE( "mqueue not implemented" ) {
 
 #if HAVE_MQ
 TEST_CASE( "reraise 'mq' sigsegv" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -630,6 +674,7 @@ TEST_CASE( "reraise 'mq' sigsegv" ) {
 
 #if __has_include(<aio.h>)
 TEST_CASE( "reraise 'aio' sigsegv" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -678,6 +723,7 @@ TEST_CASE( "reraise 'aio' sigsegv" ) {
 
 #ifndef NO_SIGBUS
 TEST_CASE( "baseline sigbus" ) {
+    resetSignalsCatch3();
     checkdeps_sigbus();
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -693,6 +739,7 @@ TEST_CASE( "baseline sigbus" ) {
 
 #ifndef NO_SIGBUS
 TEST_CASE( "reraise sigbus" ) {
+    resetSignalsCatch3();
     checkdeps_sigbus();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
@@ -713,6 +760,7 @@ TEST_CASE( "reraise sigbus" ) {
 #endif
 
 TEST_CASE( "reraise 'killed' sigbus" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -739,6 +787,7 @@ TEST_CASE( "reraise 'killed' sigbus" ) {
 #if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__) && !defined(__NetBSD__)
 // ^^^ on {freebsd,openbsd,apple,netbsd} sigio is ignored by default, so reraise will not kill the child
 TEST_CASE( "reraise sigio" ) {
+    resetSignalsCatch3();
     REQUIRE(PosixSignalManager::classifySignal(SIGIO) > 0);
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
@@ -791,6 +840,7 @@ bad:
 }
 #else
 TEST_CASE( "check sigio" ) {
+    resetSignalsCatch3();
     REQUIRE(PosixSignalManager::classifySignal(SIGIO) == 0);
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
@@ -844,6 +894,7 @@ bad:
 #endif
 
 TEST_CASE( "reraise 'killed' sigio" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -871,6 +922,7 @@ TEST_CASE( "reraise 'killed' sigio" ) {
 
 #ifndef NO_SIGILL
 TEST_CASE( "baseline sigill" ) {
+    resetSignalsCatch3();
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -885,6 +937,7 @@ TEST_CASE( "baseline sigill" ) {
 
 #ifndef NO_SIGILL
 TEST_CASE( "reraise sigill" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -904,6 +957,7 @@ TEST_CASE( "reraise sigill" ) {
 #endif
 
 TEST_CASE( "reraise 'killed' sigill" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -926,6 +980,7 @@ TEST_CASE( "reraise 'killed' sigill" ) {
 }
 
 TEST_CASE( "baseline sigfpe" ) {
+    resetSignalsCatch3();
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -938,6 +993,7 @@ TEST_CASE( "baseline sigfpe" ) {
 }
 
 TEST_CASE( "reraise sigfpe" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -956,6 +1012,7 @@ TEST_CASE( "reraise sigfpe" ) {
 }
 
 TEST_CASE( "reraise 'killed' sigfpe" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -979,6 +1036,7 @@ TEST_CASE( "reraise 'killed' sigfpe" ) {
 
 #ifndef NO_SIGTRAP
 TEST_CASE( "baseline sigtrap" ) {
+    resetSignalsCatch3();
     pid_t pid = fork();
     REQUIRE(pid != -1);
     if (pid) {
@@ -993,6 +1051,7 @@ TEST_CASE( "baseline sigtrap" ) {
 
 #ifndef NO_SIGTRAP
 TEST_CASE( "reraise sigtrap" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1012,6 +1071,7 @@ TEST_CASE( "reraise sigtrap" ) {
 #endif
 
 TEST_CASE( "reraise 'killed' sigtrap" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1037,6 +1097,7 @@ TEST_CASE( "reraise 'killed' sigtrap" ) {
     && !defined(__NetBSD__) && !defined(__sun)
 // ^^^ various bsds do not have a way to change the signal for O_ASYNC
 TEST_CASE( "reraise 'io' sigrt" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1079,6 +1140,7 @@ bad:
 #endif
 
 TEST_CASE( "term handler (sighup)" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1103,6 +1165,7 @@ TEST_CASE( "term handler (sighup)" ) {
 }
 
 TEST_CASE( "term handler (sighup) in fork" ) {
+    resetSignalsCatch3();
     int follow = GENERATE(0, 1, 2);
     CAPTURE(follow);
     SharedPageAlloc sharedPageAlloc;
@@ -1148,6 +1211,7 @@ TEST_CASE( "term handler (sighup) in fork" ) {
 
 #if defined(SIGRTMIN)
 TEST_CASE( "term handler (sigrt)" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1173,6 +1237,7 @@ TEST_CASE( "term handler (sigrt)" ) {
 #endif
 
 TEST_CASE( "ignored term handler (sighup)" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1191,6 +1256,7 @@ TEST_CASE( "ignored term handler (sighup)" ) {
 }
 
 TEST_CASE( "removed term handler (sighup)" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1210,6 +1276,7 @@ TEST_CASE( "removed term handler (sighup)" ) {
 }
 
 TEST_CASE( "crash handler (sigsegv)" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1229,6 +1296,7 @@ TEST_CASE( "crash handler (sigsegv)" ) {
 }
 
 TEST_CASE( "crash handler (sigsegv) in fork" ) {
+    resetSignalsCatch3();
     int follow = GENERATE(0, 1, 2);
     CAPTURE(follow);
     SharedPageAlloc sharedPageAlloc;
@@ -1274,6 +1342,7 @@ TEST_CASE( "crash handler (sigsegv) in fork" ) {
 }
 
 TEST_CASE( "removed crash handler (sigsegv)" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1293,6 +1362,7 @@ TEST_CASE( "removed crash handler (sigsegv)" ) {
 }
 
 TEST_CASE( "notify (sighup)" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1331,6 +1401,7 @@ TEST_CASE( "notify (sighup)" ) {
 }
 
 TEST_CASE( "removed notify (sighup)" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1367,6 +1438,7 @@ TEST_CASE( "removed notify (sighup)" ) {
 }
 
 TEST_CASE( "removed notify (sigchld)" ) {
+    resetSignalsCatch3();
     SharedPageAlloc sharedPageAlloc;
     pid_t pid = fork();
     REQUIRE(pid != -1);
@@ -1403,6 +1475,7 @@ TEST_CASE( "removed notify (sigchld)" ) {
 }
 
 TEST_CASE( "notify (sighup) in fork" ) {
+    resetSignalsCatch3();
     int follow = GENERATE(0, 1, 2);
     CAPTURE(follow);
     SharedPageAlloc sharedPageAlloc;
@@ -1461,6 +1534,7 @@ TEST_CASE( "notify (sighup) in fork" ) {
 }
 
 TEST_CASE( "reraise TSTP/TTIN/TTOU" ) {
+    resetSignalsCatch3();
     int signo = GENERATE(SIGTSTP, SIGTTIN, SIGTTOU);
     CAPTURE(signo);
     SharedPageAlloc sharedPageAlloc;
@@ -1499,6 +1573,7 @@ TEST_CASE( "reraise TSTP/TTIN/TTOU" ) {
 }
 
 TEST_CASE( "brute force 'killed' reraise" ) {
+    resetSignalsCatch3();
     int signo = GENERATE(range(1, NUM_SIGNALS));
     CAPTURE(signo);
     if (signo == SIGKILL || signo == SIGSTOP || signo == SIGTSTP || signo == SIGTTIN || signo == SIGTTOU) {
