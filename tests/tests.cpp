@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: BSL-1.0
 
+// _FORTIFY_SOURCE does not work without optimiziation, but we are going to disable optimization later in this file.
+// So just undefine it, to avoid build failures.
+#undef _FORTIFY_SOURCE
+
 #if __has_include(<aio.h>)
 #include <aio.h>
 #endif
@@ -41,6 +45,19 @@
 #include <QTimer>
 
 #include "PosixSignalManager.h"
+
+// This test is by necessity made using undefined behavior (after all it needs to test what happens in situations that
+// are for good reason undefined behavior).
+// To make this a bit more likely to work, just disable all optimizations if possible.
+
+#ifdef __clang__
+#pragma clang optimize off
+#else
+#ifdef __GNUC__
+#pragma GCC optimize ("-O0")
+#endif
+#endif
+
 
 #ifdef CATCH3
 using ListenerBase = Catch::EventListenerBase;

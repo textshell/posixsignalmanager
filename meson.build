@@ -88,8 +88,18 @@ int main() {
        name: 'feraiseexcept')
     test_cpp_args += ['-DTEST_ENABLE_FERAISEEXCEPT']
   endif
+
+  test_no_opts_cpp_args = []
+
+  # The tests are by necessity made using undefined behavior (after all it needs to test what happens in situations that
+  # are, for good reason, undefined behavior).
+  # To make this a bit more likely to work, just disable link time optimization if possible.
+  if cxx.has_argument('-fno-lto')
+    test_no_opts_cpp_args += ['-fno-lto', '-O0']
+  endif
+
   test('tests', executable('tests', 'tests/tests.cpp', link_with: [testlib],
        dependencies: [posixsignalmanager_dep, qt5_dep, librt, catch2_dep, testdep_socket],
-       cpp_args: test_cpp_args),
+       cpp_args: test_cpp_args + test_no_opts_cpp_args),
        verbose: true)
 endif
