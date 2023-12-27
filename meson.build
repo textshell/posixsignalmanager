@@ -98,8 +98,13 @@ int main() {
     test_no_opts_cpp_args += ['-fno-lto', '-O0']
   endif
 
+  verbose_kwargs = {}
+  if meson.version().version_compare('>=0.62')
+    verbose_kwargs += {'verbose': true}
+  endif
+
   test('tests', executable('tests', 'tests/tests.cpp', link_with: [testlib],
        dependencies: [posixsignalmanager_dep, qt5_dep, librt, catch2_dep, testdep_socket],
        cpp_args: test_cpp_args + test_no_opts_cpp_args),
-       verbose: true)
+       kwargs: verbose_kwargs)
 endif
