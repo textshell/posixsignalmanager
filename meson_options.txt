@@ -1,1 +1,4 @@
+# SPDX-License-Identifier: BSL-1.0
+
+option('tests', type : 'boolean', value : true)
 option('system-catch2', type : 'feature', value : 'disabled')
