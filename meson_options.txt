@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: BSL-1.0
 
-option('tests', type : 'boolean', value : true)
+option('qt', type : 'combo', choices : ['qt5', 'qt6'], value : 'qt5')
 option('system-catch2', type : 'feature', value : 'disabled')
+option('tests', type : 'boolean', value : true)

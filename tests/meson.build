@@ -45,6 +45,6 @@ if meson.version().version_compare('>=0.62')
 endif
 
 test('tests', executable('tests', 'tests.cpp', link_with: [testlib],
-     dependencies: [posixsignalmanager_dep, qt5_dep, librt, catch2_dep, testdep_socket],
+     dependencies: [posixsignalmanager_dep, qt_dep, librt, catch2_dep, testdep_socket],
      cpp_args: test_cpp_args + test_no_opts_cpp_args),
      kwargs: verbose_kwargs)

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSL-1.0
 
 project('posixsignalmanager', ['cpp'],
-  default_options : ['cpp_std=c++14'],
+  default_options : ['cpp_std=c++17'],
   version: '0.3')
 
 macros = []
@@ -22,8 +22,26 @@ if not cxx.has_function('pipe2')
   macros += ['-DNO_PIPE2']
 endif
 
-qt5 = import('qt5')
-qt5_dep = dependency('qt5', modules: 'Core')
+qt_version = get_option('qt')
+qt = import(qt_version)
+qt_dep = dependency(qt_version, modules: 'Core')
+
+lib_name_base = 'posixsignalmanager'
+
+if qt_version == 'qt5'
+  lib_name_for_meson = lib_name_base
+  pkg_filebase = 'PosixSignalManager'
+  pkg_name = 'PosixSignalManager'
+  pkg_description = 'Management of POSIX signals for Qt5 event loop'
+elif qt_version == 'qt6'
+  lib_name_for_meson = lib_name_base + '-qt6'
+  pkg_filebase = 'PosixSignalManagerQt6'
+  pkg_name = 'PosixSignalManagerQt6'
+  pkg_description = 'Management of POSIX signals for Qt6 event loop'
+else
+  error('Unsupported qt option value: ' + qt_version + '. Must be "qt5" or "qt6".')
+endif
+
 
 main_vscript = 'posixsignalmanager.symver'
 if host_machine.system() == 'linux'
@@ -34,9 +52,9 @@ else
 endif
 
 
-posixsignalmanager_lib = library('posixsignalmanager', 'PosixSignalManager.cpp',
-                                 qt5.preprocess(moc_headers: 'PosixSignalManager.h'),
-                                 dependencies : [qt5_dep, librt], cpp_args: macros,
+posixsignalmanager_lib = library(lib_name_for_meson, 'PosixSignalManager.cpp',
+                                 qt.preprocess(moc_headers: 'PosixSignalManager.h'),
+                                 dependencies : [qt_dep, librt], cpp_args: macros,
                                  link_args : main_ld_vscript,
                                  link_depends : main_vscript,
                                  soversion: '0a',
@@ -45,15 +63,15 @@ posixsignalmanager_lib = library('posixsignalmanager', 'PosixSignalManager.cpp',
 
 posixsignalmanager_dep = declare_dependency(link_with: posixsignalmanager_lib,
                                             include_directories: include_directories('.'),
-                                            dependencies: [qt5_dep, librt])
+                                            dependencies: [qt_dep, librt])
 
 install_headers('PosixSignalManager.h')
 
 import('pkgconfig').generate(
   posixsignalmanager_lib,
-  description: 'management of posix signals for environments using the qt event loop',
-  filebase: 'PosixSignalManager',
-  name: 'PosixSignalManager',
+  description: pkg_description,
+  filebase: pkg_filebase,
+  name: pkg_name,
   subdirs: ['.']
 )
 
