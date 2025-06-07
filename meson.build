@@ -57,6 +57,6 @@ import('pkgconfig').generate(
   subdirs: ['.']
 )
 
-if get_option('tests')
+if get_option('tests') and not meson.is_subproject()
   subdir('tests')
 endif
