@@ -34,9 +34,13 @@ Often using signals is not the best way to achieve robust code. If possible cons
 
 ## Building / Installing
 
-    $ meson setup -Dprefix=$HOME/opt/signalmanager/ _build
+This library supports Qt 5 and Qt 6, you need to choose the qt version at compile time via the -Dqt option to meson.
+
+    $ meson setup -Dprefix=$HOME/opt/signalmanager/ -Dqt=qt6 _build
     $ ninja -C _build
     $ ninja -C _build install
+
+The library will install pkg-config .pc files for PosixSignalManager (qt 5.x version) or PosixSignalManagerQt6.
 
 ## Examples
 
