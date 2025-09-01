@@ -20,7 +20,7 @@ which is a quite restrictive environment.
 
 If waiting for a event loop iteration is not acceptable or the signal is of a type that can only be handled directly
 from a posix signal handler there is also the possiblity to use `PosixSignalManager::addSyncSignalHandler` to register
-handlers that run directly in the async signal context. Again these handlers have to be 
+handlers that run directly in the async signal context. Again these handlers have to be
 [async signal safe](https://pubs.opengroup.org/onlinepubs/9699919799/functions/V2_chap02.html#tag_15_04_03),
 which is a quite restrictive environment. Synchronous handlers can stop processing the signal or mark it to be reraised.
 
@@ -78,11 +78,11 @@ signal handler
         } else {
             // emergency shutdown here
             // maybe remove a pid file or some other externally visible cleanup
-            
+
             // request posix signal manager to terminate application as if no signal handler had been set
             flags.reraise();
             // or as alternative
-            // _exit(1);            
+            // _exit(1);
         }
         ++count;
     }, nullptr);
