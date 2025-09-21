@@ -2,7 +2,7 @@
 
 project('posixsignalmanager', ['cpp'],
   default_options : ['cpp_std=c++17'],
-  version: '0.3')
+  version: '0.3.1')
 
 macros = []
 cxx = meson.get_compiler('cpp')
